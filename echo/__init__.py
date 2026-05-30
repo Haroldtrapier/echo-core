@@ -1,0 +1,2 @@
+"""Echo Core — standalone Railway-deployable automation backend."""
+__version__ = "1.0.0"
