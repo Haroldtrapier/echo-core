@@ -224,6 +224,74 @@ class IntegrationHealth(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+# ─── Echo Jobs ────────────────────────────────────────────────────────────────
+
+
+class EchoJob(Base):
+    """Control-panel job: a piece of content queued for Echo automation."""
+
+    __tablename__ = "echo_jobs"
+    __table_args__ = (
+        Index("ix_echo_jobs_tenant", "tenant_id"),
+        Index("ix_echo_jobs_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, default="imani-internal")
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False, default="apex-operator")
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    channel: Mapped[str] = mapped_column(String(64), nullable=False, default="linkedin")
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    job_metadata: Mapped[Any] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    approval_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    dry_run_result: Mapped[Any] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class EchoJobSchedule(Base):
+    """A future-dated trigger that runs an EchoJob dry-run when due."""
+
+    __tablename__ = "echo_job_schedules"
+    __table_args__ = (Index("ix_echo_job_schedules_job", "echo_job_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, default="imani-internal")
+    echo_job_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False, default="apex-operator")
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    run_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_result: Mapped[Any] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class EchoExecutionAudit(Base):
+    """Immutable audit log for every execute / dry-run attempt on an EchoJob."""
+
+    __tablename__ = "echo_execution_audits"
+    __table_args__ = (Index("ix_echo_execution_audits_job", "echo_job_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, default="imani-internal")
+    echo_job_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    approval_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    workflow_run_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    attempted_by: Mapped[str] = mapped_column(String(255), nullable=False, default="apex-operator")
+    action: Mapped[str] = mapped_column(String(64), nullable=False, default="execute")
+    result: Mapped[str] = mapped_column(String(64), nullable=False)
+    approval_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    live_publish_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    request_metadata: Mapped[Any] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 # ── Session helpers ───────────────────────────────────────────────────────────
 
 

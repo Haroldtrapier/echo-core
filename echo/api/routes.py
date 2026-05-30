@@ -348,6 +348,12 @@ def analytics_summary(db: Session = Depends(get_db)) -> dict[str, Any]:
     return get_summary(db)
 
 
+# ─── Echo Job Control Panel ───────────────────────────────────────────────────
+
+from echo.api.echo_routes import router as echo_router  # noqa: E402
+router.include_router(echo_router, prefix="/echo")
+
+
 # ─── Webhooks ─────────────────────────────────────────────────────────────────
 
 
