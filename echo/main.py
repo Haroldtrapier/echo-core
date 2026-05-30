@@ -41,7 +41,11 @@ app.add_middleware(
 async def startup() -> None:
     log.info("Echo Core starting up — ECHO_ENABLED=%s", ECHO_ENABLED)
     from echo.db import create_tables
-    create_tables()
+    try:
+        create_tables()
+        log.info("Database tables verified/created")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("DB not reachable at startup (will retry on first request): %s", exc)
     from echo.core.registry import workflow_count
     log.info("Registered workflows: %d", workflow_count())
 
