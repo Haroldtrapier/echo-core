@@ -33,6 +33,54 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "echo-core"}
 
 
+@router.get("/db-health")
+def db_health() -> dict:
+    """Non-authenticated DB connectivity check — safe to expose (no data returned)."""
+    from echo.config import DATABASE_URL as _db_url
+    from echo.db import engine, ensure_tables
+
+    # Mask the URL: show scheme + host only, never the password
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(_db_url)
+        safe_url = f"{parsed.scheme}://{parsed.hostname}:{parsed.port or ''}/{parsed.path.lstrip('/')}"
+    except Exception:
+        safe_url = "(unparseable)"
+
+    # Try to ensure tables are created
+    init_error: str | None = None
+    try:
+        ensure_tables()
+    except Exception as exc:
+        init_error = str(exc)
+
+    # Try a lightweight connectivity check
+    connect_error: str | None = None
+    echo_tables: list[str] = []
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                __import__("sqlalchemy").text(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name LIKE 'echo%'"
+                    " ORDER BY table_name"
+                    if not _db_url.startswith("sqlite")
+                    else "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'echo%' ORDER BY name"
+                )
+            )
+            echo_tables = [row[0] for row in result]
+    except Exception as exc:
+        connect_error = str(exc)
+
+    return {
+        "db_url_safe": safe_url,
+        "db_reachable": connect_error is None,
+        "echo_tables": echo_tables,
+        "init_error": init_error,
+        "connect_error": connect_error,
+    }
+
+
 # ─── Workflows ────────────────────────────────────────────────────────────────
 
 

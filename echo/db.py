@@ -294,9 +294,26 @@ class EchoExecutionAudit(Base):
 
 # ── Session helpers ───────────────────────────────────────────────────────────
 
+# Tracks whether create_tables() has succeeded at least once.
+# startup() catches exceptions silently; the first DB request retries if needed.
+_tables_initialized: bool = False
+
+
+def ensure_tables() -> None:
+    """Create all tables idempotently.  Safe to call multiple times."""
+    global _tables_initialized
+    if not _tables_initialized:
+        Base.metadata.create_all(bind=engine)
+        _tables_initialized = True
+
 
 def get_db() -> Generator[Session, None, None]:
-    """FastAPI dependency that yields a database session."""
+    """FastAPI dependency that yields a database session.
+
+    Retries table creation on the first request in case the startup handler
+    failed (e.g. DB not yet ready when the process started).
+    """
+    ensure_tables()
     db = SessionLocal()
     try:
         yield db
@@ -317,3 +334,5 @@ def db_session() -> Generator[Session, None, None]:
 def create_tables() -> None:
     """Create all tables if they don't exist (used by worker on startup)."""
     Base.metadata.create_all(bind=engine)
+    global _tables_initialized
+    _tables_initialized = True
