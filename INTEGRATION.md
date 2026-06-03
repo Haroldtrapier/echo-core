@@ -40,11 +40,16 @@ Content-Type: application/json
 ## Workflow Payloads
 
 ### `linkedin_signal_post`
+Generates the post and **queues it as a draft** (`status: pending_review`) in the
+Content Queue with a UTM-tagged CTA. It does not publish — `approved_publisher`
+does, after approval. Returns a `post_id` to reference later.
 ```json
 {
   "topic": "string (required) — the post topic",
   "brand": "string (optional) — brand context",
-  "dry_run": true
+  "campaign": "string (optional) — UTM campaign (default: govcon_signal)",
+  "cta_url": "string (optional) — CTA base URL (default: govconcommandcenter.com)",
+  "cta_text": "string (optional)"
 }
 ```
 
@@ -83,17 +88,20 @@ Content-Type: application/json
 No required payload. Generates from live database state.
 
 ### `approved_publisher`
+Provide either an inline `content` dict **or** a `post_id` from a draft created by
+`linkedin_signal_post` (preferred — it links the publish back to the Content
+Queue row and records a Publishing Job). On publish it writes a `publishing_jobs`
+row and advances the content item (`approved` → `published` only on a live
+publish; dry-runs stop at `approved`).
 ```json
 {
   "platform": "linkedin",
-  "content": {
-    "body": "Post content here",
-    "title": "Optional title"
-  },
+  "post_id": "post_xxxxxxxxxxxx",
   "requested_by": "harold@company.com"
 }
 ```
-Re-run with `approval_id` set after approving via `POST /approvals/{id}/decide`.
+Re-run with `approval_id` (and the same `post_id`) after approving via
+`POST /approvals/{id}/decide`.
 
 ### `content_calendar_archive`
 ```json

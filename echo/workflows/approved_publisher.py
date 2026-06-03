@@ -6,6 +6,11 @@ from typing import Any
 from echo.core.registry import register
 from echo.core.workflow import BaseWorkflow, WorkflowResult
 from echo.modules.approval import create_approval, decide, get_pending
+from echo.modules.content_store import (
+    get_content_by_post_id,
+    mark_content_published,
+    record_publishing_job,
+)
 from echo.modules.publisher import publish
 
 
@@ -23,15 +28,24 @@ class ApprovedPublisherWorkflow(BaseWorkflow):
         errors = []
         if not payload.get("platform"):
             errors.append("payload.platform is required")
-        if not payload.get("content"):
-            errors.append("payload.content (dict) is required")
+        # Either an inline content dict OR a post_id referencing a draft ContentItem.
+        if not payload.get("content") and not payload.get("post_id"):
+            errors.append("payload.content (dict) or payload.post_id is required")
         return errors
 
     def run(self, db: Any, payload: dict[str, Any]) -> WorkflowResult:
         platform = payload["platform"]
-        content = payload["content"]
         run_id = payload.get("run_id")
         approval_id = payload.get("approval_id")
+        post_id = payload.get("post_id")
+
+        # Resolve content: inline dict, or load the draft ContentItem by post_id.
+        content = payload.get("content")
+        content_item = get_content_by_post_id(db, post_id) if post_id else None
+        if content is None and content_item is not None:
+            content = {"body": content_item.caption, "caption": content_item.caption}
+        if content is None:
+            content = {}
 
         # If an approval_id is provided, check its status and publish if approved
         if approval_id:
@@ -73,13 +87,32 @@ class ApprovedPublisherWorkflow(BaseWorkflow):
                 message=f"Approval requested — ID: {approval.id}. Re-run with approval_id once approved.",
             )
 
-        # Publish
+        # Publish (dry-run unless ECHO_ALLOW_LIVE_PUBLISH=true)
         result = publish(platform, content, dry_run=payload.get("dry_run", True))
+
+        # Record a publishing job for the cockpit queue.
+        job = record_publishing_job(
+            db,
+            post_id=post_id,
+            platform=platform,
+            status=("published" if (result.success and not result.dry_run)
+                    else "dry_run" if result.success else "failed"),
+            published_url=result.live_url,
+            error_message=result.error,
+        )
+
+        # Advance the linked content item's state (approved → published if live).
+        if content_item is not None and result.success:
+            mark_content_published(db, content_item, live=not result.dry_run,
+                                   published_url=result.live_url)
+
         return WorkflowResult(
             success=result.success,
             data={
                 "approval_id": approval_id,
                 "platform": platform,
+                "post_id": post_id,
+                "publishing_job_id": job.id,
                 "dry_run": result.dry_run,
                 "live_url": result.live_url,
                 "simulated_output": result.simulated_output,

@@ -37,24 +37,29 @@ def test_workflows_listed_with_key(client, auth):
 
 # ─── Workflow execution ───────────────────────────────────────────────────────
 
-def test_run_linkedin_signal_post_dry_run(client, auth):
+def test_linkedin_signal_post_queues_a_draft(client, auth):
     r = client.post(
         "/api/v1/workflows/linkedin_signal_post/run",
         headers=auth,
-        json={"payload": {"topic": "CMMC 2.0 readiness for small contractors"},
+        json={"payload": {"topic": "CMMC 2.0 readiness for small contractors",
+                          "brand": "Apex GovCon", "campaign": "cmmc_push"},
               "triggered_by": "smoke"},
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["status"] == "succeeded"
-    assert body["result"]["dry_run"] is True
-    assert body["result"]["post_text"]
-    assert body["message"]
-    # recorded and retrievable
+    result = body["result"]
+    assert result["post_text"]
+    assert result["post_id"].startswith("post_")
+    assert result["status"] == "pending_review"
+    assert result["approved"] is False and result["published"] is False
+    assert "utm_campaign=cmmc_push" in result["cta_url"]
+
+    # run recorded + the draft shows up in the Content Queue
     run_id = body["run_id"]
     assert client.get(f"/api/v1/runs/{run_id}", headers=auth).status_code == 200
-    listing = client.get("/api/v1/runs", headers=auth).json()
-    assert listing["total"] >= 1
+    content = client.get("/api/v1/content?status=pending_review", headers=auth).json()
+    assert any(i["post_id"] == result["post_id"] for i in content["items"])
 
 
 def test_validation_returns_422(client, auth):
@@ -108,6 +113,45 @@ def test_approval_gate_then_publish(client, auth):
     )
     assert r2.status_code == 200, r2.text
     assert r2.json()["status"] == "succeeded"
+
+
+def test_draft_to_publish_populates_queues(client, auth):
+    """End-to-end: generate draft → approve → publish → cockpit rows land."""
+    # 1. Generate a draft via LinkedIn Signal Post
+    gen = client.post(
+        "/api/v1/workflows/linkedin_signal_post/run", headers=auth,
+        json={"payload": {"topic": "SDVOSB set-aside opportunities"}},
+    ).json()
+    post_id = gen["result"]["post_id"]
+
+    # 2. Request approval for that specific post
+    req = client.post(
+        "/api/v1/workflows/approved_publisher/run", headers=auth,
+        json={"payload": {"platform": "linkedin", "post_id": post_id}},
+    ).json()
+    approval_id = req["result"]["approval_id"]
+    assert req["result"]["status"] == "pending"
+
+    # 3. Approve
+    client.post(f"/api/v1/approvals/{approval_id}/decide", headers=auth,
+                json={"decision": "approved", "decision_by": "harold"})
+
+    # 4. Publish (dry-run) referencing the same post_id
+    pub = client.post(
+        "/api/v1/workflows/approved_publisher/run", headers=auth,
+        json={"payload": {"platform": "linkedin", "post_id": post_id,
+                          "approval_id": approval_id}},
+    ).json()
+    assert pub["status"] == "succeeded"
+    assert pub["result"]["publishing_job_id"]
+
+    # 5. A publishing job row exists; content item is now approved (dry-run → not live)
+    jobs = client.get("/api/v1/publishing-jobs", headers=auth).json()
+    assert any(j["post_id"] == post_id for j in jobs["jobs"])
+    content = client.get("/api/v1/content?status=approved", headers=auth).json()
+    item = next(i for i in content["items"] if i["post_id"] == post_id)
+    assert item["approved"] is True
+    assert item["published"] is False  # dry-run never claims a live publish
 
 
 def test_rejected_approval_blocks_publish(client, auth):
