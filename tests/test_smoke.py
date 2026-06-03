@@ -29,10 +29,10 @@ def test_workflows_listed_with_key(client, auth):
     r = client.get("/api/v1/workflows", headers=auth)
     assert r.status_code == 200
     body = r.json()
-    assert body["count"] == 7
+    assert body["count"] == 9
     slugs = {w["slug"] for w in body["workflows"]}
-    assert "linkedin_signal_post" in slugs
-    assert "approved_publisher" in slugs
+    assert {"linkedin_signal_post", "approved_publisher",
+            "prospect_dm", "strategic_comment"} <= slugs
 
 
 # ─── Workflow execution ───────────────────────────────────────────────────────
@@ -209,3 +209,61 @@ def test_network_free_workflows_succeed(client, auth, slug, payload):
                     headers=auth, json={"payload": payload})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "succeeded", r.text
+
+
+# ─── Outreach Engine: prospect DM + strategic comment (approval-first) ────────
+
+def test_prospect_dm_queues_draft(client, auth):
+    r = client.post(
+        "/api/v1/workflows/prospect_dm/run", headers=auth,
+        json={"payload": {"prospect_name": "Jane Doe", "company": "Acme Federal",
+                          "role": "Capture Manager", "angle": "SAM.gov teaming"}},
+    )
+    assert r.status_code == 200, r.text
+    res = r.json()["result"]
+    assert res["status"] == "pending_review"
+    assert res["dm_text"]
+    content = client.get("/api/v1/content?status=pending_review", headers=auth).json()
+    item = next(i for i in content["items"] if i["post_id"] == res["post_id"])
+    assert item["content_type"] == "prospect_dm"
+    assert item["published"] is False
+
+
+def test_prospect_dm_requires_name(client, auth):
+    r = client.post("/api/v1/workflows/prospect_dm/run", headers=auth,
+                    json={"payload": {}})
+    assert r.status_code == 422
+    assert "prospect_name" in r.text
+
+
+def test_strategic_comment_queues_draft(client, auth):
+    r = client.post(
+        "/api/v1/workflows/strategic_comment/run", headers=auth,
+        json={"payload": {"post_context": "A post about CMMC 2.0 deadlines slipping",
+                          "angle": "reassure small contractors", "post_url": "https://x/y"}},
+    )
+    assert r.status_code == 200, r.text
+    res = r.json()["result"]
+    assert res["status"] == "pending_review"
+    assert res["comment_text"]
+    content = client.get("/api/v1/content", headers=auth).json()
+    assert any(i["post_id"] == res["post_id"]
+               and i["content_type"] == "strategic_comment" for i in content["items"])
+
+
+def test_outreach_drafts_are_approvable_and_publishable(client, auth):
+    """A DM draft flows through the same approval→publish gate as posts."""
+    gen = client.post("/api/v1/workflows/prospect_dm/run", headers=auth,
+                      json={"payload": {"prospect_name": "John Roe"}}).json()
+    post_id = gen["result"]["post_id"]
+    req = client.post("/api/v1/workflows/approved_publisher/run", headers=auth,
+                      json={"payload": {"platform": "linkedin", "post_id": post_id}}).json()
+    approval_id = req["result"]["approval_id"]
+    client.post(f"/api/v1/approvals/{approval_id}/decide", headers=auth,
+                json={"decision": "approved", "decision_by": "harold"})
+    pub = client.post("/api/v1/workflows/approved_publisher/run", headers=auth,
+                      json={"payload": {"platform": "linkedin", "post_id": post_id,
+                                        "approval_id": approval_id}}).json()
+    assert pub["status"] == "succeeded"
+    jobs = client.get("/api/v1/publishing-jobs", headers=auth).json()
+    assert any(j["post_id"] == post_id for j in jobs["jobs"])

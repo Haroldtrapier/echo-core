@@ -117,6 +117,8 @@ try:
         "sam_opportunity_watch",
         "approved_publisher",
         "content_calendar_archive",
+        "prospect_dm",
+        "strategic_comment",
     ]
 
     count = workflow_count()

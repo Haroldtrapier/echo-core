@@ -60,3 +60,49 @@ def generate_intelligence_summary(data: dict[str, Any], topic: str = "") -> str:
     if topic:
         prompt = f"Topic: {topic}\n\n" + prompt
     return generate_content(prompt, system=system)
+
+
+def generate_prospect_dm(
+    prospect_name: str,
+    *,
+    company: str = "",
+    role: str = "",
+    angle: str = "",
+    brand: str = "",
+) -> str:
+    """Draft a short, personalized outreach DM for a GovCon prospect."""
+    system = (
+        "You are a GovCon business-development specialist. Write a concise, personalized "
+        "LinkedIn direct message (3-5 sentences) that opens a relationship — specific, "
+        "non-spammy, no hard sell, ends with a low-friction question. No subject line."
+    )
+    lines = [f"Prospect: {prospect_name}"]
+    if role:
+        lines.append(f"Role: {role}")
+    if company:
+        lines.append(f"Company: {company}")
+    if angle:
+        lines.append(f"Angle/context: {angle}")
+    if brand:
+        lines.append(f"Sender brand: {brand}")
+    return generate_content("\n".join(lines), system=system, max_tokens=512)
+
+
+def generate_strategic_comment(
+    post_context: str,
+    *,
+    angle: str = "",
+    brand: str = "",
+) -> str:
+    """Draft a strategic, value-adding comment to leave on a GovCon post."""
+    system = (
+        "You are a GovCon thought leader. Write a short (2-4 sentence) comment that adds "
+        "genuine insight to the post, positions the author as helpful (not promotional), "
+        "and invites further discussion. No hashtags, no link-dropping."
+    )
+    prompt = f"Post to comment on:\n{post_context}"
+    if angle:
+        prompt += f"\n\nDesired angle: {angle}"
+    if brand:
+        prompt += f"\nCommenter brand: {brand}"
+    return generate_content(prompt, system=system, max_tokens=400)

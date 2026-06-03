@@ -7,6 +7,7 @@ from echo.core.registry import register
 from echo.core.workflow import BaseWorkflow, WorkflowResult
 from echo.integrations import sam_gov, usaspending
 from echo.modules.ai_generator import generate_intelligence_summary
+from echo.modules.content_store import create_content_item
 from echo.modules.notifications import notify_slack
 
 
@@ -78,12 +79,26 @@ class GovConDailyIntelligenceWorkflow(BaseWorkflow):
 
         notify_slack(f"*GovCon Daily Intel*\n\n{briefing}")
 
+        # Queue the briefing as a draft for review.
+        item = create_content_item(
+            db,
+            workflow=self.slug,
+            platform="intel",
+            content_type="intel_brief",
+            title=f"Daily Intel: {', '.join(keywords)}"[:200],
+            caption=briefing,
+            topic=", ".join(keywords),
+            brand=payload.get("brand"),
+            status="pending_review",
+        )
+
         return WorkflowResult(
             success=True,
             data={
+                "post_id": item.post_id,
                 "opportunities_found": len(opportunities),
                 "awards_found": len(awards),
                 "briefing": briefing,
             },
-            message=f"Daily intelligence briefing generated ({len(opportunities)} opportunities, {len(awards)} awards)",
+            message=f"Daily intelligence briefing generated ({len(opportunities)} opportunities, {len(awards)} awards); draft queued",
         )

@@ -7,6 +7,7 @@ from echo.core.registry import register
 from echo.core.workflow import BaseWorkflow, WorkflowResult
 from echo.integrations.fema import get_disaster_declarations
 from echo.modules.ai_generator import generate_intelligence_summary
+from echo.modules.content_store import create_content_item
 from echo.modules.notifications import notify_slack
 
 
@@ -65,12 +66,27 @@ class FemaDisasterMonitorWorkflow(BaseWorkflow):
             level="warning",
         )
 
+        # Queue the brief as a draft for review (becomes a content/intel item).
+        item = create_content_item(
+            db,
+            workflow=self.slug,
+            platform="intel",
+            content_type="fema_alert",
+            title=f"FEMA: {len(declarations)} declaration(s)"
+                  + (f" — {state}" if state else ""),
+            caption=briefing,
+            topic="FEMA disaster declarations",
+            brand=payload.get("brand"),
+            status="pending_review",
+        )
+
         return WorkflowResult(
             success=True,
             data={
+                "post_id": item.post_id,
                 "declarations_found": len(declarations),
                 "briefing": briefing,
                 "declarations": intel_data["declarations"],
             },
-            message=f"FEMA monitor found {len(declarations)} declaration(s)",
+            message=f"FEMA monitor found {len(declarations)} declaration(s); draft queued",
         )

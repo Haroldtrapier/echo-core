@@ -72,6 +72,8 @@ Interactive docs at `/docs`.
 | `sam_opportunity_watch` | SAM.gov Opportunity Watch |
 | `approved_publisher` | Approved Publisher |
 | `content_calendar_archive` | Content Calendar Archive |
+| `prospect_dm` | Prospect DM Generator |
+| `strategic_comment` | Strategic Comment Generator |
 
 ## Railway Deployment
 
