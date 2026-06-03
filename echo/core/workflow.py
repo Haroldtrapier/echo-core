@@ -11,12 +11,19 @@ from typing import Any
 class WorkflowResult:
     success: bool
     data: dict[str, Any] = field(default_factory=dict)
+    #: Human-readable summary of the outcome (surfaced in the API response).
+    message: str | None = None
     error: str | None = None
     completed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class BaseWorkflow(ABC):
-    """All Echo workflows subclass this."""
+    """All Echo workflows subclass this.
+
+    Workflows receive a live DB session so they can read cockpit read-models
+    (e.g. ContentItem) and create approval records. The runner owns the session
+    lifecycle and commits after the workflow returns.
+    """
 
     #: Unique slug used in the registry and API (e.g. 'weekly_report')
     slug: str = ""
@@ -28,9 +35,9 @@ class BaseWorkflow(ABC):
     webhook_enabled: bool = False
 
     @abstractmethod
-    def run(self, payload: dict[str, Any]) -> WorkflowResult:
+    def run(self, db: Any, payload: dict[str, Any]) -> WorkflowResult:
         """Execute the workflow. Must return a WorkflowResult."""
 
-    def validate(self, payload: dict[str, Any]) -> str | None:
-        """Optional payload validation. Return error string or None."""
-        return None
+    def validate(self, payload: dict[str, Any]) -> list[str]:
+        """Optional payload validation. Return a list of error strings ([] = ok)."""
+        return []

@@ -97,6 +97,18 @@ pip install -r requirements.txt
 python verify_golive.py
 ```
 
+## Tests
+
+A hermetic smoke suite drives the real FastAPI app against a throwaway SQLite
+database in dry-run mode (no Postgres, Railway, or live API keys needed). It
+covers the auth gate, workflow execution, the approval→publish lifecycle, every
+cockpit read endpoint, and the analytics summary.
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest -q
+```
+
 ## Database Migrations
 
 Run in Supabase SQL Editor (or via `supabase db push`):

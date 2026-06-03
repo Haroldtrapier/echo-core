@@ -27,9 +27,9 @@ def run_workflow(
 
     instance = cls()
 
-    validation_error = instance.validate(payload)
-    if validation_error:
-        raise ValueError(f"Payload validation failed: {validation_error}")
+    validation_errors = instance.validate(payload)
+    if validation_errors:
+        raise ValueError("; ".join(validation_errors))
 
     run = WorkflowRun(
         workflow_slug=slug,
@@ -42,7 +42,7 @@ def run_workflow(
     db.refresh(run)
 
     try:
-        result = instance.run(payload)
+        result = instance.run(db, payload)
     except Exception as exc:
         log.exception("Workflow %s run=%s failed: %s", slug, run.id, exc)
         run.status = "failed"

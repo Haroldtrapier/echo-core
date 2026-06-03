@@ -33,6 +33,8 @@ SAM_GOV_API_KEY: str = os.getenv("SAM_GOV_API_KEY", "")
 BUFFER_API_KEY: str = os.getenv("BUFFER_API_KEY", "")
 LINKEDIN_ACCESS_TOKEN: str = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
 LINKEDIN_AUTHOR_URN: str = os.getenv("LINKEDIN_AUTHOR_URN", "")
+# Slack incoming-webhook URL for notifications (optional — alerts are skipped if unset).
+SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
 
 # ── Worker ────────────────────────────────────────────────────────────────────
 # How often (seconds) the background worker ticks the scheduler

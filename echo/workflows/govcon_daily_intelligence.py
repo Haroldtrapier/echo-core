@@ -24,11 +24,20 @@ class GovConDailyIntelligenceWorkflow(BaseWorkflow):
         if isinstance(keywords, str):
             keywords = [keywords]
 
+        # SAM.gov uses postedFrom/postedTo (MM/dd/yyyy); derive from days_back.
+        from datetime import datetime, timedelta, timezone
+
+        days_back = int(payload.get("days_back", 7))
+        now = datetime.now(timezone.utc)
+        posted_from = (now - timedelta(days=days_back)).strftime("%m/%d/%Y")
+        posted_to = now.strftime("%m/%d/%Y")
+
         # Fetch SAM.gov opportunities
         opportunities = sam_gov.search_opportunities(
             " ".join(keywords),
             limit=payload.get("sam_limit", 5),
-            days_back=payload.get("days_back", 7),  # type: ignore[arg-type]
+            posted_from=posted_from,
+            posted_to=posted_to,
         )
 
         # Fetch USASpending recent awards
