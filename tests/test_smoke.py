@@ -154,6 +154,29 @@ def test_draft_to_publish_populates_queues(client, auth):
     assert item["published"] is False  # dry-run never claims a live publish
 
 
+def test_scheduled_publish_threads_scheduling_metadata(client, auth):
+    """A scheduled publish records scheduling intent (still dry-run while gated)."""
+    gen = client.post("/api/v1/workflows/linkedin_signal_post/run", headers=auth,
+                      json={"payload": {"topic": "GSA Schedule basics"}}).json()
+    post_id = gen["result"]["post_id"]
+    req = client.post("/api/v1/workflows/approved_publisher/run", headers=auth,
+                      json={"payload": {"platform": "buffer", "post_id": post_id}}).json()
+    approval_id = req["result"]["approval_id"]
+    client.post(f"/api/v1/approvals/{approval_id}/decide", headers=auth,
+                json={"decision": "approved", "decision_by": "harold"})
+    pub = client.post("/api/v1/workflows/approved_publisher/run", headers=auth,
+                      json={"payload": {"platform": "buffer", "post_id": post_id,
+                                        "approval_id": approval_id,
+                                        "scheduled_at": "2030-01-01T09:00:00Z"}}).json()
+    assert pub["status"] == "succeeded"
+    assert pub["result"]["scheduled"] is True
+    assert pub["result"]["scheduled_at"] == "2030-01-01T09:00:00Z"
+    # live publishing is gated off in tests, so the actual job stays dry_run
+    assert pub["result"]["dry_run"] is True
+    jobs = client.get("/api/v1/publishing-jobs?platform=buffer", headers=auth).json()
+    assert any(j["post_id"] == post_id for j in jobs["jobs"])
+
+
 def test_rejected_approval_blocks_publish(client, auth):
     r1 = client.post(
         "/api/v1/workflows/approved_publisher/run",

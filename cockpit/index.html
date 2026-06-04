@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Echo Cockpit — GovCon Automation</title>
+<style>
+  :root { --bg:#0b1020; --panel:#151c33; --panel2:#1d2745; --ink:#e8ecf7;
+          --mut:#8b97b8; --acc:#5b8cff; --ok:#3ecf8e; --warn:#ffb84d; --bad:#ff6b6b;
+          --line:#2a3458; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { display:flex; gap:12px; align-items:center; padding:14px 20px;
+           background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0; letter-spacing:.5px; }
+  header .grow { flex:1; }
+  input, select, button, textarea { font:inherit; color:var(--ink); }
+  input, select, textarea { background:var(--panel2); border:1px solid var(--line);
+           border-radius:8px; padding:7px 10px; }
+  button { background:var(--acc); border:0; border-radius:8px; padding:7px 12px;
+           color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--mut); }
+  button.ok { background:var(--ok); } button.bad { background:var(--bad); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .wrap { padding:20px; max-width:1200px; margin:0 auto; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .card .n { font-size:24px; font-weight:700; } .card .l { color:var(--mut); font-size:12px; }
+  nav { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
+  nav button { background:var(--panel2); }
+  nav button.active { background:var(--acc); }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .s-pending_review,.s-pending,.s-dry_run { background:#3a2f12; color:var(--warn); }
+  .s-approved,.s-scheduled { background:#13314a; color:var(--acc); }
+  .s-published,.s-succeeded { background:#10311f; color:var(--ok); }
+  .s-failed,.s-rejected { background:#3a1717; color:var(--bad); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .mut { color:var(--mut); } .mono { font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  .hidden { display:none; }
+  textarea { width:100%; min-height:64px; }
+  .toast { position:fixed; right:16px; bottom:16px; background:var(--panel2);
+           border:1px solid var(--line); padding:10px 14px; border-radius:10px; max-width:360px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ ECHO COCKPIT</h1>
+  <span class="mut" id="conn">not connected</span>
+  <span class="grow"></span>
+  <input id="apiBase" placeholder="API base e.g. https://echo.up.railway.app" size="34" />
+  <input id="apiKey" placeholder="x-echo-key" type="password" size="18" />
+  <button onclick="saveConn()">Connect</button>
+</header>
+
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+
+  <nav id="nav"></nav>
+
+  <section id="view" class="panel">Connect to your Echo Core API to begin.</section>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let CFG = { base: localStorage.getItem("echo_base")||"", key: localStorage.getItem("echo_key")||"" };
+let TAB = "workflows";
+
+const TABS = ["workflows","content","approvals","publishing","logs"];
+
+function toast(msg, ms=2600){ const t=$("#toast"); t.textContent=msg; t.classList.remove("hidden");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add("hidden"), ms); }
+
+async function api(path, opts={}){
+  const r = await fetch(CFG.base.replace(/\/$/,"") + path, {
+    ...opts,
+    headers: { "x-echo-key": CFG.key, "Content-Type":"application/json", ...(opts.headers||{}) },
+  });
+  if(!r.ok){ const t = await r.text(); throw new Error(`${r.status}: ${t}`); }
+  return r.json();
+}
+
+function saveConn(){
+  CFG.base = $("#apiBase").value.trim(); CFG.key = $("#apiKey").value.trim();
+  localStorage.setItem("echo_base", CFG.base); localStorage.setItem("echo_key", CFG.key);
+  init();
+}
+
+function pill(s){ return `<span class="pill s-${s}">${s||"—"}</span>`; }
+
+async function loadCards(){
+  try{
+    const s = await api("/api/v1/analytics/summary");
+    const c = [
+      ["Workflow runs", s.workflows.total_runs, `${s.workflows.success_rate}% ok`],
+      ["Content", s.content.total, `${s.content.published} published`],
+      ["Pub jobs", s.publishing_jobs.total, `${s.publishing_jobs.failed} failed`],
+      ["Errors 24h", s.logs.errors_last_24h, ""],
+      ["GA4", s.ga4_configured ? "on" : "off", "attribution"],
+    ];
+    $("#cards").innerHTML = c.map(([l,n,sub])=>`<div class="card"><div class="n">${n}</div>
+       <div class="l">${l}</div><div class="l mut">${sub}</div></div>`).join("");
+    $("#conn").textContent = "connected"; $("#conn").style.color="var(--ok)";
+  }catch(e){ $("#conn").textContent="auth/connection error"; $("#conn").style.color="var(--bad)";
+    $("#cards").innerHTML=""; throw e; }
+}
+
+function renderNav(){
+  $("#nav").innerHTML = TABS.map(t=>`<button class="${t===TAB?'active':''}"
+     onclick="go('${t}')">${t}</button>`).join("");
+}
+function go(t){ TAB=t; renderNav(); render(); }
+
+async function render(){
+  const v = $("#view");
+  try{
+    if(TAB==="workflows") return renderWorkflows(v);
+    if(TAB==="content") return renderContent(v);
+    if(TAB==="approvals") return renderApprovals(v);
+    if(TAB==="publishing") return renderPublishing(v);
+    if(TAB==="logs") return renderLogs(v);
+  }catch(e){ v.innerHTML = `<div class="mut">Error: ${e.message}</div>`; }
+}
+
+async function renderWorkflows(v){
+  const d = await api("/api/v1/workflows");
+  v.innerHTML = `<table><thead><tr><th>Slug</th><th>Name</th><th>Run (JSON payload)</th></tr></thead>
+    <tbody>${d.workflows.map(w=>`<tr>
+      <td class="mono">${w.slug}</td><td>${w.name}<div class="mut">${w.description||""}</div></td>
+      <td><div class="row"><textarea id="p_${w.slug}" placeholder='{"topic":"..."}'></textarea>
+      <button onclick="runWf('${w.slug}')">Run</button></div></td></tr>`).join("")}</tbody></table>`;
+}
+async function runWf(slug){
+  let payload={}; const raw=$("#p_"+slug).value.trim();
+  if(raw){ try{ payload=JSON.parse(raw);}catch{ return toast("Invalid JSON payload"); } }
+  try{ const r=await api(`/api/v1/workflows/${slug}/run`,{method:"POST",
+        body:JSON.stringify({payload, triggered_by:"cockpit"})});
+    toast(`${slug}: ${r.status}${r.result&&r.result.post_id?" → "+r.result.post_id:""}`);
+    loadCards();
+  }catch(e){ toast(e.message); }
+}
+
+async function renderContent(v){
+  const d = await api("/api/v1/content?limit=100");
+  v.innerHTML = `<div class="row" style="margin-bottom:10px"><b>Content Queue</b>
+    <span class="mut">${d.total} items</span></div>
+    <table><thead><tr><th>Post ID</th><th>Title</th><th>Type</th><th>Status</th>
+    <th>Approved</th><th>Published</th></tr></thead><tbody>
+    ${d.items.map(i=>`<tr><td class="mono">${i.post_id||""}</td><td>${i.title||""}</td>
+      <td class="mut">${i.content_type||""}</td><td>${pill(i.status)}</td>
+      <td>${i.approved?"✓":"—"}</td><td>${i.published?"✓":"—"}</td></tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function renderApprovals(v){
+  const d = await api("/api/v1/approvals");
+  v.innerHTML = `<div class="row" style="margin-bottom:10px"><b>Approval Queue</b>
+    <span class="mut">${d.count} pending</span></div>
+    ${d.count===0?'<div class="mut">Nothing waiting.</div>':''}
+    <table><tbody>${d.approvals.map(a=>`<tr>
+      <td class="mono">${a.id}</td><td>${a.reason||""}<div class="mut">by ${a.requested_by}</div></td>
+      <td><div class="row">
+        <button class="ok" onclick="decide('${a.id}','approved')">Approve</button>
+        <button class="bad" onclick="decide('${a.id}','rejected')">Reject</button>
+      </div></td></tr>`).join("")}</tbody></table>`;
+}
+async function decide(id, decision){
+  try{ await api(`/api/v1/approvals/${id}/decide`,{method:"POST",
+        body:JSON.stringify({decision, decision_by:"cockpit"})});
+    toast(`Approval ${decision}`); render(); loadCards();
+  }catch(e){ toast(e.message); }
+}
+
+async function renderPublishing(v){
+  const d = await api("/api/v1/publishing-jobs?limit=100");
+  v.innerHTML = `<div class="row" style="margin-bottom:10px"><b>Publishing Jobs</b>
+    <span class="mut">${d.total}</span></div>
+    <table><thead><tr><th>Post ID</th><th>Platform</th><th>Status</th><th>Mode</th>
+    <th>URL</th></tr></thead><tbody>
+    ${d.jobs.map(j=>`<tr><td class="mono">${j.post_id||""}</td><td>${j.platform||""}</td>
+      <td>${pill(j.status)}</td><td class="mut">${j.scheduling_mode||""}</td>
+      <td>${j.published_url?`<a href="${j.published_url}" target="_blank">link</a>`:"—"}</td></tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function renderLogs(v){
+  const d = await api("/api/v1/logs?limit=100");
+  v.innerHTML = `<table><thead><tr><th>Level</th><th>Workflow</th><th>Message</th><th>When</th></tr></thead>
+    <tbody>${d.logs.map(l=>`<tr><td>${pill(l.level)}</td><td class="mut">${l.workflow||""}</td>
+      <td>${l.message||""}</td><td class="mut">${(l.created_at||"").slice(0,19)}</td></tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function init(){
+  $("#apiBase").value = CFG.base; $("#apiKey").value = CFG.key;
+  if(!CFG.base || !CFG.key){ $("#view").textContent="Enter your API base URL and key, then Connect."; return; }
+  renderNav();
+  try{ await loadCards(); await render(); }
+  catch(e){ $("#view").innerHTML=`<div class="mut">Could not load: ${e.message}</div>`; }
+}
+init();
+</script>
+</body>
+</html>

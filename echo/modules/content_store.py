@@ -111,14 +111,18 @@ def record_publishing_job(
     published_url: str | None = None,
     external_post_id: str | None = None,
     error_message: str | None = None,
+    scheduling_mode: str = "immediate",
+    scheduled_for: datetime | None = None,
 ) -> PublishingJob:
     """Record a publishing attempt. ``status`` is one of
-    ``published`` | ``dry_run`` | ``failed`` | ``pending``."""
+    ``published`` | ``scheduled`` | ``dry_run`` | ``failed`` | ``pending``."""
     job = PublishingJob(
         post_id=post_id,
         platform=platform,
         status=status,
         attempt_count=1,
+        scheduling_mode=scheduling_mode,
+        scheduled_for=scheduled_for,
         external_post_id=external_post_id,
         published_url=published_url,
         published_at=_utcnow() if status == "published" else None,
@@ -136,15 +140,21 @@ def mark_content_published(
     *,
     live: bool,
     published_url: str | None = None,
+    scheduled: bool = False,
 ) -> ContentItem:
     """Advance an approved item's publishing state.
 
-    Live publish → ``published=True`` with URL + timestamp (status ``published``).
-    Dry-run → stays ``published=False`` (status ``approved``) — nothing left the
-    building, so we never claim it did.
+    * Live + immediate → ``published=True`` with URL + timestamp (status ``published``).
+    * Live + scheduled → status ``scheduled`` (``published`` stays False until it
+      actually goes out — Buffer holds it).
+    * Dry-run → stays ``published=False`` (status ``approved``) — nothing left the
+      building, so we never claim it did.
     """
     item.approved = True
-    if live:
+    if live and scheduled:
+        item.status = "scheduled"
+        item.published_url = published_url
+    elif live:
         item.published = True
         item.published_url = published_url
         item.published_at = _utcnow()

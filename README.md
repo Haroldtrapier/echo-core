@@ -25,7 +25,8 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `ANTHROPIC_API_KEY` | Enables AI content generation via Claude |
 | `ANTHROPIC_MODEL` | Claude model to use (default: `claude-3-5-haiku-20241022`) |
 | `SAM_GOV_API_KEY` | SAM.gov contract opportunity search |
-| `BUFFER_API_KEY` | Buffer social scheduling |
+| `BUFFER_API_KEY` | Buffer social scheduling (access token) |
+| `BUFFER_PROFILE_IDS` | Comma-separated Buffer profile ids to target (default: first connected) |
 | `LINKEDIN_ACCESS_TOKEN` | LinkedIn publishing |
 | `LINKEDIN_AUTHOR_URN` | LinkedIn author URN (`urn:li:person:...`) |
 | `SLACK_WEBHOOK_URL` | Slack notifications |

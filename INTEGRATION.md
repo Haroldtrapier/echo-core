@@ -97,9 +97,15 @@ publish; dry-runs stop at `approved`).
 {
   "platform": "linkedin",
   "post_id": "post_xxxxxxxxxxxx",
-  "requested_by": "harold@company.com"
+  "requested_by": "harold@company.com",
+  "scheduled_at": "2030-01-01T09:00:00Z"
 }
 ```
+- `platform`: `linkedin` (immediate) or `buffer` (immediate or scheduled).
+- `scheduled_at` (optional, Buffer): ISO8601 time — Buffer holds the post until
+  then; the content item is marked `scheduled` rather than `published`.
+- The linked draft's UTM-tagged CTA (`cta_url`) is automatically included.
+
 Re-run with `approval_id` (and the same `post_id`) after approving via
 `POST /approvals/{id}/decide`.
 
