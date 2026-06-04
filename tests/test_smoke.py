@@ -31,10 +31,10 @@ def test_workflows_listed_with_key(client, auth):
     r = client.get("/api/v1/workflows", headers=auth)
     assert r.status_code == 200
     body = r.json()
-    assert body["count"] == 10
+    assert body["count"] == 11
     slugs = {w["slug"] for w in body["workflows"]}
-    assert {"linkedin_signal_post", "approved_publisher",
-            "prospect_dm", "strategic_comment", "social_post"} <= slugs
+    assert {"linkedin_signal_post", "approved_publisher", "prospect_dm",
+            "strategic_comment", "social_post", "produce_media"} <= slugs
 
 
 # ─── Workflow execution ───────────────────────────────────────────────────────
@@ -235,6 +235,62 @@ def test_social_post_rejects_unknown_platform(client, auth):
                     json={"payload": {"platform": "myspace", "topic": "x"}})
     assert r.status_code == 422
     assert "platform" in r.text
+
+
+# ─── Media generation (Instagram image / TikTok video) ───────────────────────
+
+def test_media_generators_degrade_without_providers():
+    from echo.modules import image_generator, video_generator
+    assert image_generator.is_configured() is False
+    assert image_generator.generate_image("topic") is None
+    v = video_generator.generate_video("a script")
+    assert v["status"] == "needs_production" and v["video_url"] is None
+
+
+def test_produce_media_reports_needs_production_without_provider(client, auth):
+    gen = client.post("/api/v1/workflows/social_post/run", headers=auth,
+                      json={"payload": {"platform": "instagram", "topic": "GSA wins"}}).json()
+    post_id = gen["result"]["post_id"]
+    r = client.post("/api/v1/workflows/produce_media/run", headers=auth,
+                    json={"payload": {"post_id": post_id}})
+    assert r.status_code == 200, r.text
+    res = r.json()
+    assert res["status"] == "failed"  # workflow ran, asset not produced
+    assert res["result"]["status"] == "needs_media"
+    assert res["result"]["provider_configured"] is False
+
+
+def test_produce_media_attaches_image_when_provider_present(client, auth, monkeypatch):
+    # Simulate a configured image provider returning a hosted URL.
+    from echo.modules import image_generator
+    monkeypatch.setattr(image_generator, "generate_image",
+                        lambda *a, **k: "https://cdn.example/generated.png")
+
+    gen = client.post("/api/v1/workflows/social_post/run", headers=auth,
+                      json={"payload": {"platform": "instagram", "topic": "8(a) basics"}}).json()
+    post_id = gen["result"]["post_id"]
+    assert gen["result"]["status"] == "needs_media"
+
+    prod = client.post("/api/v1/workflows/produce_media/run", headers=auth,
+                       json={"payload": {"post_id": post_id}}).json()
+    assert prod["status"] == "succeeded"
+    assert prod["result"]["image_url"].endswith("generated.png")
+    assert prod["result"]["status"] == "pending_review"
+
+    # the draft is now publishable (dry-run)
+    item = next(i for i in client.get("/api/v1/content?status=pending_review",
+                headers=auth).json()["items"] if i["post_id"] == post_id)
+    assert item["status"] == "pending_review"
+
+
+def test_social_post_auto_media_video_needs_production(client, auth):
+    # auto_media with no video provider → still needs_media, with production detail
+    r = client.post("/api/v1/workflows/social_post/run", headers=auth,
+                    json={"payload": {"platform": "tiktok", "topic": "CMMC tips",
+                                      "auto_media": True}}).json()
+    res = r["result"]
+    assert res["needs_media"] is True
+    assert res["media_production"]["status"] == "needs_production"
 
 
 def test_rejected_approval_blocks_publish(client, auth):

@@ -17,6 +17,7 @@ from typing import Any
 
 from echo.core.registry import register
 from echo.core.workflow import BaseWorkflow, WorkflowResult
+from echo.modules import image_generator, video_generator
 from echo.modules.ai_generator import SOCIAL_PLATFORMS, generate_social_post
 from echo.modules.content_store import build_utm_url, create_content_item
 
@@ -69,6 +70,20 @@ class SocialPostWorkflow(BaseWorkflow):
         cta_url = build_utm_url(cta_base, **utm)
 
         media_kind = _MEDIA_REQUIRED.get(platform)
+
+        # Optionally auto-produce the required asset up front.
+        media_production = None
+        if media_kind and not image_url and payload.get("auto_media"):
+            if platform == "instagram":
+                image_url = image_generator.generate_image(topic, brand=brand or "")
+                media_production = {"kind": "image", "produced": bool(image_url),
+                                    "provider_configured": image_generator.is_configured()}
+            elif platform == "tiktok":
+                vres = video_generator.generate_video(text)
+                if vres.get("video_url"):
+                    image_url = vres["video_url"]
+                media_production = {"kind": "video", **vres}
+
         needs_media = bool(media_kind) and not image_url
         status = "needs_media" if needs_media else "pending_review"
 
@@ -104,6 +119,7 @@ class SocialPostWorkflow(BaseWorkflow):
                 "status": item.status,
                 "needs_media": needs_media,
                 "media_kind": media_kind,
+                "media_production": media_production,
                 "image_url": image_url,
                 "cta_url": cta_url,
             },

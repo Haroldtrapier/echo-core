@@ -49,6 +49,9 @@ OPTIONAL = [
     "SLACK_WEBHOOK_URL",
     "GA4_PROPERTY_ID",
     "GA4_ACCESS_TOKEN",
+    "IMAGE_API_KEY",
+    "VIDEO_API_KEY",
+    "VIDEO_API_URL",
 ]
 
 for var in REQUIRED:
@@ -85,6 +88,9 @@ modules_to_check = [
     "echo.modules.ai_generator",
     "echo.modules.analytics",
     "echo.modules.notifications",
+    "echo.modules.content_store",
+    "echo.modules.image_generator",
+    "echo.modules.video_generator",
     "echo.integrations.sam_gov",
     "echo.integrations.usaspending",
     "echo.integrations.fema",
@@ -123,6 +129,7 @@ try:
         "prospect_dm",
         "strategic_comment",
         "social_post",
+        "produce_media",
     ]
 
     count = workflow_count()
