@@ -53,6 +53,25 @@ does, after approval. Returns a `post_id` to reference later.
 }
 ```
 
+### `social_post`
+Generates network-appropriate copy for **linkedin / facebook / instagram /
+tiktok** and queues an approval-first draft (returns `post_id`).
+- **Instagram** requires an `image_url`; without one the draft is `needs_media`
+  and `approved_publisher` refuses a live post.
+- **TikTok** produces a *script* and requires a produced video (`image_url` =
+  video URL) before a live post. Echo does not generate video.
+- Facebook/Instagram/TikTok publish via **Buffer** (connect the channel, target
+  it with `BUFFER_PROFILE_IDS`). LinkedIn can publish natively.
+```json
+{
+  "platform": "instagram",
+  "topic": "SDVOSB set-aside wins this quarter",
+  "brand": "Sturgeon GovCon",
+  "image_url": "https://cdn.example/post.jpg",
+  "campaign": "q3_wins"
+}
+```
+
 ### `govcon_daily_intelligence`
 ```json
 {

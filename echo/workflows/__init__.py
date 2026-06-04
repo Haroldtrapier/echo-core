@@ -9,4 +9,5 @@ from echo.workflows import (  # noqa: F401
     content_calendar_archive,
     prospect_dm,
     strategic_comment,
+    social_post,
 )

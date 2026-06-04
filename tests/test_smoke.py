@@ -12,6 +12,8 @@ These cases cover the "still being finished" checklist items: authenticated
 """
 from __future__ import annotations
 
+import pytest
+
 
 # ─── Auth + health ──────────────────────────────────────────────────────────
 
@@ -29,10 +31,10 @@ def test_workflows_listed_with_key(client, auth):
     r = client.get("/api/v1/workflows", headers=auth)
     assert r.status_code == 200
     body = r.json()
-    assert body["count"] == 9
+    assert body["count"] == 10
     slugs = {w["slug"] for w in body["workflows"]}
     assert {"linkedin_signal_post", "approved_publisher",
-            "prospect_dm", "strategic_comment"} <= slugs
+            "prospect_dm", "strategic_comment", "social_post"} <= slugs
 
 
 # ─── Workflow execution ───────────────────────────────────────────────────────
@@ -177,6 +179,64 @@ def test_scheduled_publish_threads_scheduling_metadata(client, auth):
     assert any(j["post_id"] == post_id for j in jobs["jobs"])
 
 
+@pytest.mark.parametrize("platform,ctype", [
+    ("linkedin", "linkedin_post"),
+    ("facebook", "facebook_post"),
+])
+def test_social_post_text_networks_queue_drafts(client, auth, platform, ctype):
+    r = client.post("/api/v1/workflows/social_post/run", headers=auth,
+                    json={"payload": {"platform": platform, "topic": "DoD cloud spending"}})
+    assert r.status_code == 200, r.text
+    res = r.json()["result"]
+    assert res["content_type"] == ctype
+    assert res["status"] == "pending_review"
+    assert res["needs_media"] is False
+
+
+def test_instagram_without_image_is_flagged_needs_media(client, auth):
+    r = client.post("/api/v1/workflows/social_post/run", headers=auth,
+                    json={"payload": {"platform": "instagram", "topic": "SDVOSB wins"}})
+    res = r.json()["result"]
+    assert res["status"] == "needs_media"
+    assert res["needs_media"] is True and res["media_kind"] == "image"
+
+
+def test_instagram_with_image_is_publishable(client, auth):
+    r = client.post("/api/v1/workflows/social_post/run", headers=auth,
+                    json={"payload": {"platform": "instagram", "topic": "SDVOSB wins",
+                                      "image_url": "https://cdn.example/post.jpg"}})
+    res = r.json()["result"]
+    assert res["status"] == "pending_review"
+    assert res["needs_media"] is False
+    # the image rides through approval → publish (dry-run here)
+    post_id = res["post_id"]
+    req = client.post("/api/v1/workflows/approved_publisher/run", headers=auth,
+                      json={"payload": {"platform": "instagram", "post_id": post_id}}).json()
+    aid = req["result"]["approval_id"]
+    client.post(f"/api/v1/approvals/{aid}/decide", headers=auth,
+                json={"decision": "approved", "decision_by": "harold"})
+    pub = client.post("/api/v1/workflows/approved_publisher/run", headers=auth,
+                      json={"payload": {"platform": "instagram", "post_id": post_id,
+                                        "approval_id": aid}}).json()
+    assert pub["status"] == "succeeded"
+
+
+def test_tiktok_generates_script_and_requires_video(client, auth):
+    r = client.post("/api/v1/workflows/social_post/run", headers=auth,
+                    json={"payload": {"platform": "tiktok", "topic": "8(a) program 101"}})
+    res = r.json()["result"]
+    assert res["content_type"] == "tiktok_video"
+    assert res["needs_media"] is True and res["media_kind"] == "video"
+    assert res["text"]  # a script was produced
+
+
+def test_social_post_rejects_unknown_platform(client, auth):
+    r = client.post("/api/v1/workflows/social_post/run", headers=auth,
+                    json={"payload": {"platform": "myspace", "topic": "x"}})
+    assert r.status_code == 422
+    assert "platform" in r.text
+
+
 def test_rejected_approval_blocks_publish(client, auth):
     r1 = client.post(
         "/api/v1/workflows/approved_publisher/run",
@@ -239,8 +299,6 @@ def test_weekly_report_includes_campaign_attribution(client, auth):
 # (linkedin_signal_post + approved_publisher are covered above. fema /
 # usaspending / govcon_daily_intelligence reach external APIs and are exercised
 # manually, not in the hermetic suite.)
-
-import pytest  # noqa: E402
 
 
 @pytest.mark.parametrize("slug,payload", [

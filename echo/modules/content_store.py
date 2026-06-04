@@ -70,9 +70,14 @@ def create_content_item(
     cta_text: str | None = None,
     cta_url: str | None = None,
     utm: dict[str, str] | None = None,
+    image_url: str | None = None,
     status: str = "draft",
 ) -> ContentItem:
-    """Persist a new content item (defaults to an unapproved, unpublished draft)."""
+    """Persist a new content item (defaults to an unapproved, unpublished draft).
+
+    ``image_url`` holds the media asset (image for Instagram, video for TikTok);
+    ``image_verified`` is set True when an asset is present.
+    """
     utm = utm or {}
     item = ContentItem(
         post_id=new_post_id(),
@@ -88,6 +93,8 @@ def create_content_item(
         utm_medium=utm.get("medium"),
         utm_campaign=utm.get("campaign"),
         utm_content=utm.get("content"),
+        image_url=image_url,
+        image_verified=bool(image_url),
         status=status,
         approved=False,
         published=False,
