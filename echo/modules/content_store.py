@@ -109,6 +109,18 @@ def get_content_by_post_id(db: Session, post_id: str) -> ContentItem | None:
     return db.query(ContentItem).filter(ContentItem.post_id == post_id).first()
 
 
+def attach_media(db: Session, item: ContentItem, media_url: str) -> ContentItem:
+    """Attach a generated/produced media asset and clear the needs_media gate."""
+    item.image_url = media_url
+    item.image_verified = True
+    if item.status == "needs_media":
+        item.status = "pending_review"
+    item.updated_at = _utcnow()
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 def record_publishing_job(
     db: Session,
     *,

@@ -32,6 +32,8 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `SLACK_WEBHOOK_URL` | Slack notifications |
 | `GA4_PROPERTY_ID` | GA4 property id for campaign click/conversion attribution |
 | `GA4_ACCESS_TOKEN` | OAuth2 bearer token for the GA4 Data API (read-only) |
+| `IMAGE_API_KEY` | OpenAI-compatible images API key (auto Instagram image) |
+| `VIDEO_API_KEY` + `VIDEO_API_URL` | External render service for TikTok video (`{script,voice}` → `{video_url}`) |
 | `ECHO_ALLOW_LIVE_PUBLISH` | Set to `true` to enable live publishing (default: dry-run only) |
 | `ECHO_ENABLED` | Set to `false` to disable workflow scheduling (default: `true`) |
 | `WORKER_TICK_INTERVAL` | Worker scheduler interval in seconds (default: `60`) |
@@ -78,6 +80,7 @@ Interactive docs at `/docs`.
 | `prospect_dm` | Prospect DM Generator |
 | `strategic_comment` | Strategic Comment Generator |
 | `social_post` | Multi-Platform Social Post (LinkedIn/Facebook/Instagram/TikTok) |
+| `produce_media` | Produce Media Asset (Instagram image / TikTok video) |
 
 ## Railway Deployment
 

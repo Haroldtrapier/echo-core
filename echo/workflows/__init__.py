@@ -10,4 +10,5 @@ from echo.workflows import (  # noqa: F401
     prospect_dm,
     strategic_comment,
     social_post,
+    produce_media,
 )

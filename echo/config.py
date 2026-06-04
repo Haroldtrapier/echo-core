@@ -43,6 +43,18 @@ SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
 GA4_PROPERTY_ID: str = os.getenv("GA4_PROPERTY_ID", "")
 GA4_ACCESS_TOKEN: str = os.getenv("GA4_ACCESS_TOKEN", "")
 
+# Image generation (Instagram creative). OpenAI-compatible images API.
+IMAGE_API_KEY: str = os.getenv("IMAGE_API_KEY", "")
+IMAGE_API_BASE: str = os.getenv("IMAGE_API_BASE", "https://api.openai.com/v1")
+IMAGE_MODEL: str = os.getenv("IMAGE_MODEL", "gpt-image-1")
+IMAGE_SIZE: str = os.getenv("IMAGE_SIZE", "1024x1024")
+
+# Video generation ("Echo Complete" / TikTok). Point VIDEO_API_URL at a render
+# service that accepts {"script","voice"} and returns {"video_url"}.
+VIDEO_API_KEY: str = os.getenv("VIDEO_API_KEY", "")
+VIDEO_API_URL: str = os.getenv("VIDEO_API_URL", "")
+VIDEO_VOICE: str = os.getenv("VIDEO_VOICE", "default")
+
 # ── Worker ────────────────────────────────────────────────────────────────────
 # How often (seconds) the background worker ticks the scheduler
 WORKER_TICK_INTERVAL: int = int(os.getenv("WORKER_TICK_INTERVAL", "60"))

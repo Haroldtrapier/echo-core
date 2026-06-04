@@ -72,6 +72,19 @@ tiktok** and queues an approval-first draft (returns `post_id`).
 }
 ```
 
+### `produce_media`
+Generates the asset a draft needs and attaches it (flips `needs_media` →
+`pending_review`). Requires a provider; otherwise reports `needs_production`.
+- **Instagram image** — set `IMAGE_API_KEY` (OpenAI-compatible images API).
+- **TikTok video** — set `VIDEO_API_KEY` + `VIDEO_API_URL` (a render service that
+  accepts `{"script","voice"}` and returns `{"video_url"}`). Echo does not render
+  video itself.
+```json
+{ "post_id": "post_xxxxxxxxxxxx" }
+```
+`social_post` also accepts `"auto_media": true` to attempt asset production at
+draft time.
+
 ### `govcon_daily_intelligence`
 ```json
 {
