@@ -9,7 +9,12 @@ ECHO_ALLOW_LIVE_PUBLISH is never set.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
+from pathlib import Path
+
+# Ensure the repo root is importable when CI runs bare `pytest` (no `python -m`).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Must run before importing echo.config (import-time env reads).
 _TMP_DB = os.path.join(tempfile.mkdtemp(prefix="echo_smoke_"), "smoke.db")
