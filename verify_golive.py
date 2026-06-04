@@ -91,6 +91,7 @@ modules_to_check = [
     "echo.modules.content_store",
     "echo.modules.image_generator",
     "echo.modules.video_generator",
+    "echo.modules.asset_storage",
     "echo.integrations.sam_gov",
     "echo.integrations.usaspending",
     "echo.integrations.fema",

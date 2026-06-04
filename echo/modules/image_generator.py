@@ -53,13 +53,23 @@ def generate_image(topic: str, *, brand: str = "", size: Optional[str] = None) -
             data = json.loads(resp.read().decode("utf-8"))
         item = (data.get("data") or [{}])[0]
         url = item.get("url")
-        if not url and item.get("b64_json"):
-            # Some models return base64; hosting that is an infra concern — surface
-            # honestly rather than returning an unusable data blob.
-            log.warning("image API returned base64; no host configured — treating as unavailable")
-            return None
-        log.info("Generated image for topic=%r", topic)
-        return url
+        if url:
+            log.info("Generated image (hosted by provider) for topic=%r", topic)
+            return url
+        if item.get("b64_json"):
+            # Models like gpt-image-1 return base64 — host it ourselves so Buffer/IG
+            # can fetch a real URL. If no storage is configured, treat as unavailable.
+            import base64
+
+            from echo.modules import asset_storage
+
+            hosted = asset_storage.upload_bytes(
+                base64.b64decode(item["b64_json"]), content_type="image/png", ext="png",
+            )
+            if not hosted:
+                log.warning("image API returned base64 but no storage configured — unavailable")
+            return hosted
+        return None
     except Exception as exc:  # noqa: BLE001
         log.exception("Image generation failed: %s", exc)
         return None

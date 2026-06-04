@@ -293,6 +293,33 @@ def test_social_post_auto_media_video_needs_production(client, auth):
     assert res["media_production"]["status"] == "needs_production"
 
 
+def test_asset_storage_degrades_without_config():
+    from echo.modules import asset_storage
+    assert asset_storage.is_configured() is False
+    assert asset_storage.upload_bytes(b"\x89PNG...", content_type="image/png") is None
+
+
+def test_image_generator_hosts_base64_via_storage(monkeypatch):
+    """A base64 image response is hosted via asset_storage and returns a real URL."""
+    import json as _json
+
+    from echo.modules import asset_storage, image_generator
+
+    monkeypatch.setattr(image_generator, "is_configured", lambda: True)
+
+    class _Resp:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return _json.dumps({"data": [{"b64_json": "aGk="}]}).encode()
+
+    monkeypatch.setattr(image_generator.urllib.request, "urlopen", lambda *a, **k: _Resp())
+    monkeypatch.setattr(asset_storage, "upload_bytes",
+                        lambda *a, **k: "https://store.example/echo/abc.png")
+
+    assert image_generator.generate_image("CMMC tips") == "https://store.example/echo/abc.png"
+
+
 def test_rejected_approval_blocks_publish(client, auth):
     r1 = client.post(
         "/api/v1/workflows/approved_publisher/run",

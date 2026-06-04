@@ -34,6 +34,7 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `GA4_ACCESS_TOKEN` | OAuth2 bearer token for the GA4 Data API (read-only) |
 | `IMAGE_API_KEY` | OpenAI-compatible images API key (auto Instagram image) |
 | `VIDEO_API_KEY` + `VIDEO_API_URL` | External render service for TikTok video (`{script,voice}` → `{video_url}`) |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` + `MEDIA_BUCKET` | Host generated images at a public URL (for base64 image responses) |
 | `ECHO_ALLOW_LIVE_PUBLISH` | Set to `true` to enable live publishing (default: dry-run only) |
 | `ECHO_ENABLED` | Set to `false` to disable workflow scheduling (default: `true`) |
 | `WORKER_TICK_INTERVAL` | Worker scheduler interval in seconds (default: `60`) |
