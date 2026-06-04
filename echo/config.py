@@ -55,6 +55,12 @@ VIDEO_API_KEY: str = os.getenv("VIDEO_API_KEY", "")
 VIDEO_API_URL: str = os.getenv("VIDEO_API_URL", "")
 VIDEO_VOICE: str = os.getenv("VIDEO_VOICE", "default")
 
+# Asset storage (Supabase Storage) — hosts generated media (e.g. base64 images)
+# at a public URL so Buffer/Instagram can use it.
+SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+MEDIA_BUCKET: str = os.getenv("MEDIA_BUCKET", "echo-media")
+
 # ── Worker ────────────────────────────────────────────────────────────────────
 # How often (seconds) the background worker ticks the scheduler
 WORKER_TICK_INTERVAL: int = int(os.getenv("WORKER_TICK_INTERVAL", "60"))

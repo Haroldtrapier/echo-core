@@ -124,12 +124,52 @@ Add any subset; absent keys leave that integration safely disabled.
 | Buffer scheduling | `BUFFER_API_KEY`, `BUFFER_PROFILE_IDS` | https://buffer.com/developers/apps |
 | Slack alerts | `SLACK_WEBHOOK_URL` | https://api.slack.com/messaging/webhooks |
 | GA4 attribution | `GA4_PROPERTY_ID`, `GA4_ACCESS_TOKEN` | GA4 Admin → property id; see GA4 note below |
+| Instagram image (auto) | `IMAGE_API_KEY` (+ image hosting below) | OpenAI-compatible images API |
+| TikTok video (auto) | `VIDEO_API_KEY`, `VIDEO_API_URL` | your render service (contract below) |
+| Image hosting | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `MEDIA_BUCKET` | Supabase → Storage |
 
 **GA4 token note.** The Data API needs an OAuth2 bearer token. Create a Google
 **service account**, grant it **Viewer** on the GA4 property, and run a small
 refresher (Cloud Function / cron) that mints an access token and writes it to
 `GA4_ACCESS_TOKEN`. Until then GA4 reports `ga4_configured: false` and the
 Weekly Report falls back to DB inventory.
+
+### Instagram image hosting
+
+Instagram requires a real, publicly-fetchable image URL (Buffer can't post
+base64). The flow:
+
+1. Set `IMAGE_API_KEY` (OpenAI-compatible images API). Models like `gpt-image-1`
+   return **base64**, not a URL.
+2. Create a **public** Supabase Storage bucket (default name `echo-media`), then
+   set `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and `MEDIA_BUCKET`. Echo uploads
+   the generated image and uses the resulting public URL.
+3. Generate with `social_post` (`"auto_media": true`) or attach later with
+   `produce_media` (`{"post_id": "..."}`).
+
+If the image API returns a hosted URL directly (e.g. some DALL·E configs), the
+storage step is optional. Without hosting **and** with a base64-only model, the
+draft stays `needs_media` (it will not publish without a usable image).
+
+### TikTok render-service contract (`VIDEO_API_URL`)
+
+Echo generates the **script** and delegates rendering to your service. Point
+`VIDEO_API_URL` at an endpoint that:
+
+- **Receives** `POST` with `Authorization: Bearer $VIDEO_API_KEY` and JSON body:
+  ```json
+  { "script": "<the TikTok script Echo generated>", "voice": "default" }
+  ```
+- **Returns** JSON containing the finished asset URL:
+  ```json
+  { "video_url": "https://cdn.example/echo/clip.mp4" }
+  ```
+  (An async service may instead return `{ "job_id": "..." }`; Echo then reports
+  `needs_production` until you attach the finished URL via `produce_media` or by
+  re-running once the URL is known.)
+
+Until a render service is wired, TikTok drafts stay `needs_media` — Echo never
+fabricates video.
 
 ---
 
