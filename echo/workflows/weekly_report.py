@@ -5,7 +5,7 @@ from typing import Any
 
 from echo.core.registry import register
 from echo.core.workflow import BaseWorkflow, WorkflowResult
-from echo.modules.analytics import get_summary
+from echo.modules.analytics import get_campaign_attribution, get_summary
 from echo.modules.ai_generator import generate_intelligence_summary
 from echo.modules.notifications import build_summary_notification, notify_slack
 
@@ -23,10 +23,13 @@ class WeeklyReportWorkflow(BaseWorkflow):
         # Pull live analytics from the database
         summary = get_summary(db)
 
-        # Generate AI narrative
+        # Attribute clicks/conversions to campaigns via GA4 (DB-only if unset)
+        attribution = get_campaign_attribution(db, days_back=payload.get("days_back", 7))
+
+        # Generate AI narrative over both
         narrative = generate_intelligence_summary(
-            summary,
-            topic="Weekly GovCon automation performance",
+            {"summary": summary, "attribution": attribution},
+            topic="Weekly GovCon automation performance + campaign attribution",
         )
 
         # Send Slack notification
@@ -37,6 +40,7 @@ class WeeklyReportWorkflow(BaseWorkflow):
             success=True,
             data={
                 "summary": summary,
+                "attribution": attribution,
                 "narrative": narrative,
             },
             message="Weekly report generated and dispatched",

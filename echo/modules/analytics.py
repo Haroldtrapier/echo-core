@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from echo.db import AutomationLog, ContentItem, IntegrationHealth, PublishingJob, WorkflowRun
+from echo.integrations import ga4
 
 
 def get_summary(db: Session) -> dict[str, Any]:
@@ -48,6 +49,7 @@ def get_summary(db: Session) -> dict[str, Any]:
 
     return {
         "generated_at": now.isoformat(),
+        "ga4_configured": ga4.is_configured(),
         "workflows": {
             "total_runs": total_runs,
             "runs_last_24h": runs_24h,
@@ -72,4 +74,40 @@ def get_summary(db: Session) -> dict[str, Any]:
             "healthy": integrations_healthy,
             "down": integrations_down,
         },
+    }
+
+
+def get_campaign_attribution(db: Session, *, days_back: int = 30) -> dict[str, Any]:
+    """Join Echo's content (by UTM campaign) with GA4 click/conversion data.
+
+    Answers "which post/CTA drove clicks?". When GA4 is not configured, returns
+    the DB-side campaign inventory with ``ga4_configured: false`` and zeroed
+    metrics — honest about the fact that no live click data was available.
+    """
+    rows = (
+        db.query(ContentItem.utm_campaign, func.count(ContentItem.id))
+        .filter(ContentItem.utm_campaign.isnot(None))
+        .group_by(ContentItem.utm_campaign)
+        .all()
+    )
+    content_counts = {camp: int(n) for camp, n in rows if camp}
+
+    metrics = ga4.get_campaign_metrics(list(content_counts.keys()), days_back=days_back)
+
+    campaigns: dict[str, Any] = {}
+    for camp, count in content_counts.items():
+        m = metrics.get(camp, {})
+        campaigns[camp] = {
+            "content_items": count,
+            "sessions": m.get("sessions", 0.0),
+            "active_users": m.get("active_users", 0.0),
+            "conversions": m.get("conversions", 0.0),
+        }
+
+    top = sorted(campaigns.items(), key=lambda kv: kv[1]["sessions"], reverse=True)
+    return {
+        "ga4_configured": ga4.is_configured(),
+        "days_back": days_back,
+        "campaigns": campaigns,
+        "top_campaigns": [c for c, _ in top[:5]],
     }

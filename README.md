@@ -29,6 +29,8 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `LINKEDIN_ACCESS_TOKEN` | LinkedIn publishing |
 | `LINKEDIN_AUTHOR_URN` | LinkedIn author URN (`urn:li:person:...`) |
 | `SLACK_WEBHOOK_URL` | Slack notifications |
+| `GA4_PROPERTY_ID` | GA4 property id for campaign click/conversion attribution |
+| `GA4_ACCESS_TOKEN` | OAuth2 bearer token for the GA4 Data API (read-only) |
 | `ECHO_ALLOW_LIVE_PUBLISH` | Set to `true` to enable live publishing (default: dry-run only) |
 | `ECHO_ENABLED` | Set to `false` to disable workflow scheduling (default: `true`) |
 | `WORKER_TICK_INTERVAL` | Worker scheduler interval in seconds (default: `60`) |

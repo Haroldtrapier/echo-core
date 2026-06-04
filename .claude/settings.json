@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pip install -q -r requirements.txt -r requirements-dev.txt 2>/dev/null; echo 'Echo Core deps ready. Run: pytest -q'"
+          }
+        ]
+      }
+    ]
+  }
+}

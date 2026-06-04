@@ -47,6 +47,8 @@ OPTIONAL = [
     "LINKEDIN_ACCESS_TOKEN",
     "LINKEDIN_AUTHOR_URN",
     "SLACK_WEBHOOK_URL",
+    "GA4_PROPERTY_ID",
+    "GA4_ACCESS_TOKEN",
 ]
 
 for var in REQUIRED:
@@ -89,6 +91,7 @@ modules_to_check = [
     "echo.integrations.linkedin",
     "echo.integrations.buffer",
     "echo.integrations.govcon_cms",
+    "echo.integrations.ga4",
     "echo.workflows",
     "echo.api.routes",
     "echo.main",

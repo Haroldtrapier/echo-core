@@ -189,6 +189,27 @@ def test_analytics_summary(client, auth):
     body = r.json()
     assert "workflows" in body
     assert body["workflows"]["total_runs"] >= 1
+    assert body["ga4_configured"] is False  # no GA4 creds in test env
+
+
+def test_ga4_degrades_gracefully_without_credentials():
+    from echo.integrations import ga4
+    assert ga4.is_configured() is False
+    assert ga4.get_campaign_metrics(["any_campaign"]) == {}
+
+
+def test_weekly_report_includes_campaign_attribution(client, auth):
+    # Seed a campaign by generating a post (creates ContentItem w/ utm_campaign)
+    client.post("/api/v1/workflows/linkedin_signal_post/run", headers=auth,
+                json={"payload": {"topic": "8(a) program basics", "campaign": "attr_demo"}})
+    r = client.post("/api/v1/workflows/weekly_report/run", headers=auth, json={"payload": {}})
+    assert r.status_code == 200, r.text
+    attribution = r.json()["result"]["attribution"]
+    assert attribution["ga4_configured"] is False
+    assert "attr_demo" in attribution["campaigns"]
+    # DB inventory present even though GA4 metrics are zero (no creds)
+    assert attribution["campaigns"]["attr_demo"]["content_items"] >= 1
+    assert attribution["campaigns"]["attr_demo"]["sessions"] == 0.0
 
 
 # ─── Network-free workflows succeed end-to-end ────────────────────────────────

@@ -35,6 +35,9 @@ LINKEDIN_ACCESS_TOKEN: str = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
 LINKEDIN_AUTHOR_URN: str = os.getenv("LINKEDIN_AUTHOR_URN", "")
 # Slack incoming-webhook URL for notifications (optional — alerts are skipped if unset).
 SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
+# GA4 (Google Analytics 4) — read-only campaign attribution for the Weekly Report.
+GA4_PROPERTY_ID: str = os.getenv("GA4_PROPERTY_ID", "")
+GA4_ACCESS_TOKEN: str = os.getenv("GA4_ACCESS_TOKEN", "")
 
 # ── Worker ────────────────────────────────────────────────────────────────────
 # How often (seconds) the background worker ticks the scheduler
