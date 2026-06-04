@@ -77,6 +77,7 @@ Interactive docs at `/docs`.
 | `content_calendar_archive` | Content Calendar Archive |
 | `prospect_dm` | Prospect DM Generator |
 | `strategic_comment` | Strategic Comment Generator |
+| `social_post` | Multi-Platform Social Post (LinkedIn/Facebook/Instagram/TikTok) |
 
 ## Railway Deployment
 

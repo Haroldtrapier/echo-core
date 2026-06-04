@@ -35,6 +35,7 @@ def post(content: dict[str, Any], *, profile_ids: list[str] | None = None) -> st
     body = content.get("body", content.get("caption", ""))
     url_to_share = content.get("url", "")
     scheduled_at = content.get("scheduled_at")
+    image_url = content.get("image_url") or content.get("media")
 
     # Resolve profile IDs — explicit arg, then configured BUFFER_PROFILE_IDS,
     # then fall back to the first connected profile.
@@ -55,6 +56,10 @@ def post(content: dict[str, Any], *, profile_ids: list[str] | None = None) -> st
         "text": text,
         "profile_ids[]": profile_ids,
     }
+    if image_url:
+        # Buffer attaches media via media[photo]; required for Instagram.
+        params["media[photo]"] = image_url
+        params["media[thumbnail]"] = image_url
     if scheduled_at:
         import calendar
         from datetime import datetime

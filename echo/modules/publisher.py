@@ -9,7 +9,14 @@ from echo.core.logger import get_logger
 
 log = get_logger("echo.modules.publisher")
 
-SUPPORTED_PLATFORMS = ("linkedin", "buffer", "email", "slack", "govcon_cms")
+SUPPORTED_PLATFORMS = (
+    "linkedin", "buffer", "facebook", "instagram", "tiktok",
+    "email", "slack", "govcon_cms",
+)
+
+# Networks published through Buffer (operator connects the channel + targets it
+# via BUFFER_PROFILE_IDS).
+_BUFFER_NETWORKS = ("buffer", "facebook", "instagram", "tiktok")
 
 
 @dataclass
@@ -70,7 +77,8 @@ def _live_publish(platform: str, content: dict[str, Any]) -> PublishResult:
             url = li_post(content)
             return PublishResult(platform=platform, dry_run=False, success=True, live_url=url)
 
-        if platform == "buffer":
+        if platform in _BUFFER_NETWORKS:
+            # Facebook / Instagram / TikTok are published via Buffer channels.
             from echo.integrations.buffer import post as buf_post
             url = buf_post(content)
             return PublishResult(platform=platform, dry_run=False, success=True, live_url=url)

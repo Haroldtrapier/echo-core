@@ -106,3 +106,48 @@ def generate_strategic_comment(
     if brand:
         prompt += f"\nCommenter brand: {brand}"
     return generate_content(prompt, system=system, max_tokens=400)
+
+
+# Platform-specific system prompts for the multi-platform content generator.
+_SOCIAL_SYSTEMS = {
+    "linkedin": (
+        "You are an expert B2G/GovCon content strategist. Write a professional LinkedIn "
+        "post: concise, credible, scannable, ending with a clear CTA. Include a few "
+        "relevant hashtags."
+    ),
+    "facebook": (
+        "You are a GovCon social media writer. Write a friendly, plain-language Facebook "
+        "post for small-business owners. Warm and approachable, 1-2 short paragraphs, a "
+        "clear CTA, minimal hashtags."
+    ),
+    "instagram": (
+        "You are a GovCon Instagram copywriter. Write an engaging caption (hook first "
+        "line, short value, CTA) plus 8-12 relevant hashtags on the last line. The post "
+        "REQUIRES an accompanying image — describe nothing, just write the caption."
+    ),
+    "tiktok": (
+        "You are a GovCon short-video scriptwriter. Write a 20-35 second TikTok script as "
+        "a hook + 3-5 punchy beats + CTA, formatted for a talking-head/overlay video. "
+        "This is a SCRIPT for a video that must be produced separately."
+    ),
+}
+
+#: Networks the multi-platform generator + publisher understand.
+SOCIAL_PLATFORMS = tuple(_SOCIAL_SYSTEMS.keys())
+
+
+def generate_social_post(platform: str, topic: str, *, brand: str = "") -> str:
+    """Generate network-appropriate copy for a social platform.
+
+    ``platform`` ∈ :data:`SOCIAL_PLATFORMS`. Instagram returns a caption (image
+    supplied separately); TikTok returns a video script (video produced
+    separately).
+    """
+    system = _SOCIAL_SYSTEMS.get(platform)
+    if system is None:
+        raise ValueError(f"unsupported social platform: {platform}")
+    prompt = f"Write a {platform} post about: {topic}"
+    if brand:
+        prompt += f"\nBrand context: {brand}"
+    max_tokens = 700 if platform in ("linkedin", "instagram", "tiktok") else 500
+    return generate_content(prompt, system=system, max_tokens=max_tokens)

@@ -122,6 +122,7 @@ try:
         "content_calendar_archive",
         "prospect_dm",
         "strategic_comment",
+        "social_post",
     ]
 
     count = workflow_count()

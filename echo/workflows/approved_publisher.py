@@ -54,6 +54,17 @@ class ApprovedPublisherWorkflow(BaseWorkflow):
         if scheduled_at and "scheduled_at" not in content:
             content["scheduled_at"] = scheduled_at
 
+        # Attach media + note per-network media requirements (IG image, TikTok video).
+        media_required: str | None = None
+        if content_item is not None:
+            if content_item.image_url:
+                content["image_url"] = content_item.image_url
+            ct = content_item.content_type or ""
+            if ct == "instagram_post":
+                media_required = "image"
+            elif ct == "tiktok_video":
+                media_required = "video"
+
         # If an approval_id is provided, check its status and publish if approved
         if approval_id:
             from echo.db import Approval
@@ -92,6 +103,18 @@ class ApprovedPublisherWorkflow(BaseWorkflow):
                 success=True,
                 data={"approval_id": approval.id, "status": "pending"},
                 message=f"Approval requested — ID: {approval.id}. Re-run with approval_id once approved.",
+            )
+
+        # Block a LIVE publish of Instagram/TikTok without the required media asset.
+        from echo.config import ECHO_ALLOW_LIVE_PUBLISH
+        will_publish_live = ECHO_ALLOW_LIVE_PUBLISH and not payload.get("dry_run", True)
+        if media_required and not content.get("image_url") and will_publish_live:
+            return WorkflowResult(
+                success=False,
+                data={"post_id": post_id, "approval_id": approval_id,
+                      "needs_media": media_required},
+                message=(f"Cannot publish: {content_item.content_type} requires a "
+                         f"{media_required} asset — set image_url on the draft first."),
             )
 
         # Publish (dry-run unless ECHO_ALLOW_LIVE_PUBLISH=true)
