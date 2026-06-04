@@ -80,6 +80,9 @@ Interactive docs at `/docs`.
 
 ## Railway Deployment
 
+> 📘 **For a full, step-by-step go-live runbook** (migrations, env vars, smoke
+> checks, the publish-gate flip, troubleshooting) see **[DEPLOY.md](DEPLOY.md)**.
+
 ### Deploy Echo Web
 
 1. Connect this repo in the Railway dashboard
