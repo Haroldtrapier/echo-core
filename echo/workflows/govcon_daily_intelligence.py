@@ -7,6 +7,7 @@ from echo.core.registry import register
 from echo.core.workflow import BaseWorkflow, WorkflowResult
 from echo.integrations import sam_gov, usaspending
 from echo.modules.ai_generator import generate_intelligence_summary
+from echo.modules.content_store import create_content_item
 from echo.modules.notifications import notify_slack
 
 
@@ -24,11 +25,20 @@ class GovConDailyIntelligenceWorkflow(BaseWorkflow):
         if isinstance(keywords, str):
             keywords = [keywords]
 
+        # SAM.gov uses postedFrom/postedTo (MM/dd/yyyy); derive from days_back.
+        from datetime import datetime, timedelta, timezone
+
+        days_back = int(payload.get("days_back", 7))
+        now = datetime.now(timezone.utc)
+        posted_from = (now - timedelta(days=days_back)).strftime("%m/%d/%Y")
+        posted_to = now.strftime("%m/%d/%Y")
+
         # Fetch SAM.gov opportunities
         opportunities = sam_gov.search_opportunities(
             " ".join(keywords),
             limit=payload.get("sam_limit", 5),
-            days_back=payload.get("days_back", 7),  # type: ignore[arg-type]
+            posted_from=posted_from,
+            posted_to=posted_to,
         )
 
         # Fetch USASpending recent awards
@@ -69,12 +79,26 @@ class GovConDailyIntelligenceWorkflow(BaseWorkflow):
 
         notify_slack(f"*GovCon Daily Intel*\n\n{briefing}")
 
+        # Queue the briefing as a draft for review.
+        item = create_content_item(
+            db,
+            workflow=self.slug,
+            platform="intel",
+            content_type="intel_brief",
+            title=f"Daily Intel: {', '.join(keywords)}"[:200],
+            caption=briefing,
+            topic=", ".join(keywords),
+            brand=payload.get("brand"),
+            status="pending_review",
+        )
+
         return WorkflowResult(
             success=True,
             data={
+                "post_id": item.post_id,
                 "opportunities_found": len(opportunities),
                 "awards_found": len(awards),
                 "briefing": briefing,
             },
-            message=f"Daily intelligence briefing generated ({len(opportunities)} opportunities, {len(awards)} awards)",
+            message=f"Daily intelligence briefing generated ({len(opportunities)} opportunities, {len(awards)} awards); draft queued",
         )

@@ -7,4 +7,6 @@ from echo.workflows import (  # noqa: F401
     sam_opportunity_watch,
     approved_publisher,
     content_calendar_archive,
+    prospect_dm,
+    strategic_comment,
 )

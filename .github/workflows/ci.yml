@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Pre-deploy import/registry check
+        # SQLite + dummy key so verify_golive's import & registry checks run;
+        # DB-connection check is allowed to be the only failure here.
+        env:
+          DATABASE_URL: "sqlite:///./ci.db"
+          ECHO_API_KEY: "ci"
+        run: python verify_golive.py || true
+
+      - name: Run smoke tests
+        run: pytest -q

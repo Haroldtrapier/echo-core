@@ -112,23 +112,23 @@ def run_workflow_endpoint(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Trigger a workflow by slug."""
-    wf = get_workflow(slug)
-    if wf is None:
+    if get_workflow(slug) is None:
         raise HTTPException(status_code=404, detail=f"Workflow '{slug}' not found")
 
-    errors = wf.validate(body.payload)
-    if errors:
-        raise HTTPException(status_code=422, detail={"validation_errors": errors})
+    try:
+        run, result = run_workflow(db, slug, body.payload, triggered_by=body.triggered_by)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
-    run = run_workflow(db, slug, body.payload, triggered_by=body.triggered_by)
     return {
         "run_id": str(run.id),
         "slug": run.workflow_slug,
         "status": run.status,
         "result": run.result,
+        "message": result.message,
         "error": run.error,
-        "started_at": run.started_at.isoformat() if run.started_at else None,
-        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+        "finished_at": run.updated_at.isoformat() if run.updated_at else None,
     }
 
 
@@ -160,7 +160,7 @@ def list_runs(
                 "triggered_by": r.triggered_by,
                 "error": r.error,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
-                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "finished_at": r.updated_at.isoformat() if r.updated_at else None,
             }
             for r in runs
         ],
@@ -184,8 +184,7 @@ def get_run(run_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
         "result": run.result,
         "error": run.error,
         "created_at": run.created_at.isoformat() if run.created_at else None,
-        "started_at": run.started_at.isoformat() if run.started_at else None,
-        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "finished_at": run.updated_at.isoformat() if run.updated_at else None,
     }
 
 
@@ -273,11 +272,15 @@ def list_content(
         "items": [
             {
                 "id": str(i.id),
+                "post_id": i.post_id,
                 "title": i.title,
-                "platform": i.platform,
+                "brand": i.brand,
+                "workflow": i.workflow,
+                "content_type": i.content_type,
                 "status": i.status,
+                "approved": i.approved,
                 "published": i.published,
-                "workflow_run_id": str(i.workflow_run_id) if i.workflow_run_id else None,
+                "published_url": i.published_url,
                 "created_at": i.created_at.isoformat() if i.created_at else None,
                 "updated_at": i.updated_at.isoformat() if i.updated_at else None,
             }
@@ -312,12 +315,15 @@ def list_publishing_jobs(
         "jobs": [
             {
                 "id": str(j.id),
+                "job_id": j.job_id,
+                "post_id": j.post_id,
                 "platform": j.platform,
                 "status": j.status,
-                "dry_run": j.dry_run,
-                "live_url": j.live_url,
-                "error": j.error,
-                "workflow_run_id": str(j.workflow_run_id) if j.workflow_run_id else None,
+                "scheduling_mode": j.scheduling_mode,
+                "attempt_count": j.attempt_count,
+                "external_post_id": j.external_post_id,
+                "published_url": j.published_url,
+                "error_message": j.error_message,
                 "created_at": j.created_at.isoformat() if j.created_at else None,
             }
             for j in jobs
@@ -336,15 +342,15 @@ def list_logs(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     level: str | None = Query(None),
-    workflow_run_id: str | None = Query(None),
+    run_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List automation log entries."""
     q = db.query(AutomationLog)
     if level:
         q = q.filter(AutomationLog.level == level)
-    if workflow_run_id:
-        q = q.filter(AutomationLog.workflow_run_id == workflow_run_id)
+    if run_id:
+        q = q.filter(AutomationLog.run_id == run_id)
     total = q.count()
     logs = q.order_by(AutomationLog.created_at.desc()).offset(offset).limit(limit).all()
     return {
@@ -353,8 +359,9 @@ def list_logs(
                 "id": str(l.id),
                 "level": l.level,
                 "message": l.message,
-                "source": l.source,
-                "workflow_run_id": str(l.workflow_run_id) if l.workflow_run_id else None,
+                "workflow": l.workflow,
+                "step": l.step,
+                "run_id": l.run_id,
                 "created_at": l.created_at.isoformat() if l.created_at else None,
             }
             for l in logs
@@ -371,15 +378,17 @@ def list_logs(
 @router.get("/integration-health", dependencies=[Depends(require_api_key)])
 def list_integration_health(db: Session = Depends(get_db)) -> dict[str, Any]:
     """List integration health status records."""
-    records = db.query(IntegrationHealth).order_by(IntegrationHealth.checked_at.desc()).all()
+    records = db.query(IntegrationHealth).order_by(IntegrationHealth.id.desc()).all()
     return {
         "integrations": [
             {
                 "id": str(r.id),
-                "integration_name": r.integration_name,
+                "integration": r.integration,
                 "status": r.status,
-                "details": r.details,
-                "checked_at": r.checked_at.isoformat() if r.checked_at else None,
+                "credential_name": r.credential_name,
+                "error_message": r.error_message,
+                "notes": r.notes,
+                "last_checked": r.last_checked.isoformat() if r.last_checked else None,
             }
             for r in records
         ],
@@ -421,22 +430,22 @@ def webhook_trigger(
     Returns immediately with the run_id and initial status — the workflow
     executes synchronously within this request.
     """
-    wf = get_workflow(slug)
-    if wf is None:
+    if get_workflow(slug) is None:
         raise HTTPException(status_code=404, detail=f"Workflow '{slug}' not found")
 
-    errors = wf.validate(body)
-    if errors:
-        raise HTTPException(status_code=422, detail={"validation_errors": errors})
+    try:
+        run, result = run_workflow(db, slug, body, triggered_by="webhook")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
-    run = run_workflow(db, slug, body, triggered_by="webhook")
     return {
         "run_id": str(run.id),
         "slug": run.workflow_slug,
         "status": run.status,
         "result": run.result,
+        "message": result.message,
         "error": run.error,
         "triggered_by": "webhook",
-        "started_at": run.started_at.isoformat() if run.started_at else None,
-        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+        "finished_at": run.updated_at.isoformat() if run.updated_at else None,
     }

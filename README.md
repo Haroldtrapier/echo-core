@@ -25,10 +25,13 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `ANTHROPIC_API_KEY` | Enables AI content generation via Claude |
 | `ANTHROPIC_MODEL` | Claude model to use (default: `claude-3-5-haiku-20241022`) |
 | `SAM_GOV_API_KEY` | SAM.gov contract opportunity search |
-| `BUFFER_API_KEY` | Buffer social scheduling |
+| `BUFFER_API_KEY` | Buffer social scheduling (access token) |
+| `BUFFER_PROFILE_IDS` | Comma-separated Buffer profile ids to target (default: first connected) |
 | `LINKEDIN_ACCESS_TOKEN` | LinkedIn publishing |
 | `LINKEDIN_AUTHOR_URN` | LinkedIn author URN (`urn:li:person:...`) |
 | `SLACK_WEBHOOK_URL` | Slack notifications |
+| `GA4_PROPERTY_ID` | GA4 property id for campaign click/conversion attribution |
+| `GA4_ACCESS_TOKEN` | OAuth2 bearer token for the GA4 Data API (read-only) |
 | `ECHO_ALLOW_LIVE_PUBLISH` | Set to `true` to enable live publishing (default: dry-run only) |
 | `ECHO_ENABLED` | Set to `false` to disable workflow scheduling (default: `true`) |
 | `WORKER_TICK_INTERVAL` | Worker scheduler interval in seconds (default: `60`) |
@@ -72,6 +75,8 @@ Interactive docs at `/docs`.
 | `sam_opportunity_watch` | SAM.gov Opportunity Watch |
 | `approved_publisher` | Approved Publisher |
 | `content_calendar_archive` | Content Calendar Archive |
+| `prospect_dm` | Prospect DM Generator |
+| `strategic_comment` | Strategic Comment Generator |
 
 ## Railway Deployment
 
@@ -95,6 +100,18 @@ Share the same env vars (no separate Postgres needed — same `DATABASE_URL`).
 ```bash
 pip install -r requirements.txt
 python verify_golive.py
+```
+
+## Tests
+
+A hermetic smoke suite drives the real FastAPI app against a throwaway SQLite
+database in dry-run mode (no Postgres, Railway, or live API keys needed). It
+covers the auth gate, workflow execution, the approval→publish lifecycle, every
+cockpit read endpoint, and the analytics summary.
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest -q
 ```
 
 ## Database Migrations

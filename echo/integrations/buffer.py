@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from echo.config import BUFFER_API_KEY
+from echo.config import BUFFER_API_KEY, BUFFER_PROFILE_IDS
 from echo.core.logger import get_logger
 
 log = get_logger("echo.integrations.buffer")
@@ -36,7 +36,10 @@ def post(content: dict[str, Any], *, profile_ids: list[str] | None = None) -> st
     url_to_share = content.get("url", "")
     scheduled_at = content.get("scheduled_at")
 
-    # Resolve profile IDs — use provided or fetch first connected profile
+    # Resolve profile IDs — explicit arg, then configured BUFFER_PROFILE_IDS,
+    # then fall back to the first connected profile.
+    if not profile_ids:
+        profile_ids = list(BUFFER_PROFILE_IDS)
     if not profile_ids:
         profiles = _get_profiles()
         profile_ids = [p["id"] for p in profiles[:1]]
