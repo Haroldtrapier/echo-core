@@ -31,10 +31,14 @@ def test_workflows_listed_with_key(client, auth):
     r = client.get("/api/v1/workflows", headers=auth)
     assert r.status_code == 200
     body = r.json()
-    assert body["count"] == 11
+    # 11 core workflows + 6 Echo GovCon pack workflows
+    assert body["count"] >= 17
     slugs = {w["slug"] for w in body["workflows"]}
     assert {"linkedin_signal_post", "approved_publisher", "prospect_dm",
             "strategic_comment", "social_post", "produce_media"} <= slugs
+    # Echo GovCon pack is registered
+    assert {"govcon_daily_brief", "opportunity_to_content", "fema_procurement_watch",
+            "certification_education", "lead_nurture", "weekly_performance_tracker"} <= slugs
 
 
 # ─── Workflow execution ───────────────────────────────────────────────────────

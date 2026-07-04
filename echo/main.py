@@ -46,8 +46,15 @@ async def startup() -> None:
         log.info("Database tables verified/created")
     except Exception as exc:  # noqa: BLE001
         log.warning("DB not reachable at startup (will retry on first request): %s", exc)
-    from echo.core.registry import workflow_count
+    from echo.core.registry import sync_registry, workflow_count
     log.info("Registered workflows: %d", workflow_count())
+    # Mirror the in-code registry into the echo_workflows table (best-effort).
+    try:
+        from echo.db import db_session
+        with db_session() as db:
+            sync_registry(db)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Registry sync skipped at startup: %s", exc)
 
 
 @app.on_event("shutdown")

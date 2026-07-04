@@ -25,7 +25,8 @@ class BaseWorkflow(ABC):
     lifecycle and commits after the workflow returns.
     """
 
-    #: Unique slug used in the registry and API (e.g. 'weekly_report')
+    #: Unique slug used in the registry and API (e.g. 'weekly_report').
+    #: Doubles as ``workflow_id`` in the echo_workflows registry table.
     slug: str = ""
     #: Human-readable display name
     name: str = ""
@@ -33,6 +34,25 @@ class BaseWorkflow(ABC):
     description: str = ""
     #: Whether this workflow can be triggered via webhook
     webhook_enabled: bool = False
+
+    # ── Registry metadata (mirrored into the echo_workflows table) ────────────
+    #: Product area this workflow belongs to:
+    #: echo_core | echo_govcon | govcon_command_center | sturgeon | imani
+    product_area: str = "echo_core"
+    #: How this workflow is normally triggered: manual | scheduled | webhook | event
+    trigger_type: str = "manual"
+    #: Advisory description of the expected ``payload`` fields (read-only default).
+    input_schema: dict[str, Any] = {}
+    #: What the workflow produces: draft | brief | report | alert | handoff | media | none
+    output_type: str = "none"
+    #: Whether output must pass the human approval queue before it can ship.
+    approval_required: bool = False
+    #: Connector/integration targets this workflow may write to (advisory).
+    connector_targets: tuple[str, ...] = ()
+    #: Minimum billing tier required to run: free | starter | pro | enterprise
+    required_tier: str = "free"
+    #: Whether the workflow is enabled (surfaced/runnable).
+    enabled: bool = True
 
     @abstractmethod
     def run(self, db: Any, payload: dict[str, Any]) -> WorkflowResult:

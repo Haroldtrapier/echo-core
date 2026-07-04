@@ -206,6 +206,11 @@ def list_approvals(
                 "requested_by": a.requested_by,
                 "reason": a.reason,
                 "status": a.status,
+                "draft_type": a.draft_type,
+                "draft_content": a.draft_content,
+                "content_post_id": a.content_post_id,
+                "reviewed_by": a.reviewed_by,
+                "reviewed_at": a.reviewed_at.isoformat() if a.reviewed_at else None,
                 "created_at": a.created_at.isoformat() if a.created_at else None,
             }
             for a in pending
@@ -409,6 +414,12 @@ def analytics_summary(db: Session = Depends(get_db)) -> dict[str, Any]:
 
 from echo.api.echo_routes import router as echo_router  # noqa: E402
 router.include_router(echo_router, prefix="/echo")
+
+
+# ─── Echo GovCon (approval queue, Sturgeon handoff, analytics, registry) ──────
+
+from echo.api.govcon_routes import router as govcon_router  # noqa: E402
+router.include_router(govcon_router, prefix="/govcon")
 
 
 # ─── Webhooks ─────────────────────────────────────────────────────────────────
