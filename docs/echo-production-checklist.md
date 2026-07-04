@@ -40,6 +40,22 @@ Status of the Echo Core + Echo GovCon production MVP.
 - [ ] **Multi-tenant RLS** — Echo is single-tenant-by-default (`DEFAULT_TENANT_ID`);
       tenant columns exist but Supabase RLS policies are not enabled (the existing
       migrations use no RLS — matching project convention).
+- [ ] **Pre-existing id-type drift (follow-up, not introduced here)** — in the
+      hand-written SQL migrations `workflow_runs.id` / `approvals.id` are `UUID`,
+      while the runtime ORM uses `VARCHAR(32)` hex ids. The app provisions its
+      schema via `create_all()` (ORM types), so this only affects environments
+      that apply the SQL migrations standalone. Reconciling it is a destructive
+      PK-type change on shipped tables and should be a dedicated migration, not
+      bundled here.
+
+## Table names
+
+The five Echo tables: `echo_workflows`, `echo_analytics_events`, and
+`echo_sturgeon_handoffs` are dedicated tables; runs and approvals reuse the
+pre-existing `workflow_runs` / `approvals` tables (extended in place, no
+duplication). Migration `0004` adds read-through compatibility views
+`echo_workflow_runs` and `echo_approvals` so all five spec names resolve. Verified
+idempotent + view creation on Postgres 16 (0001→0004, then re-run 0004).
 
 ## Environment variables
 

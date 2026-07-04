@@ -110,3 +110,21 @@ DROP TRIGGER IF EXISTS trg_echo_handoffs_updated_at ON echo_sturgeon_handoffs;
 CREATE TRIGGER trg_echo_handoffs_updated_at
     BEFORE UPDATE ON echo_sturgeon_handoffs
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ─── Spec-name compatibility views ───────────────────────────────────────────
+-- The Echo spec references `echo_workflow_runs` and `echo_approvals`. The runtime
+-- (echo.db: WorkflowRun / Approval) stores runs and approvals in the pre-existing
+-- `workflow_runs` and `approvals` tables — extended in place to avoid duplicating
+-- a working table. These read-through views expose those tables under the
+-- echo_-prefixed names for external consumers/dashboards, without renaming the
+-- authoritative tables or disturbing the approvals.run_id → workflow_runs(id) FK.
+-- Additive, non-destructive, and idempotent (guarded on base-table existence).
+DO $$
+BEGIN
+  IF to_regclass('public.workflow_runs') IS NOT NULL THEN
+    EXECUTE 'CREATE OR REPLACE VIEW echo_workflow_runs AS SELECT * FROM workflow_runs';
+  END IF;
+  IF to_regclass('public.approvals') IS NOT NULL THEN
+    EXECUTE 'CREATE OR REPLACE VIEW echo_approvals AS SELECT * FROM approvals';
+  END IF;
+END $$;

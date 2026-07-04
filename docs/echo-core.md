@@ -78,6 +78,22 @@ metadata (mirrored to the `echo_workflows` table by `sync_registry` on startup):
 
 Read it at `GET /api/v1/govcon/workflows/registry`.
 
+### Table names
+
+The five Echo tables map to the runtime as follows. Runs and approvals reuse the
+pre-existing `workflow_runs` / `approvals` tables (extended in place, not
+duplicated); migration `0004` also adds read-through **compatibility views**
+`echo_workflow_runs` and `echo_approvals` so the spec-named surface resolves for
+external consumers/dashboards.
+
+| Spec name | Runtime table (ORM) | Notes |
+| --- | --- | --- |
+| `echo_workflows` | `echo_workflows` (`EchoWorkflow`) | registry mirror |
+| `echo_workflow_runs` | `workflow_runs` (`WorkflowRun`) | + view `echo_workflow_runs` |
+| `echo_approvals` | `approvals` (`Approval`) | + view `echo_approvals` |
+| `echo_analytics_events` | `echo_analytics_events` (`EchoAnalyticsEvent`) | — |
+| `echo_sturgeon_handoffs` | `echo_sturgeon_handoffs` (`EchoSturgeonHandoff`) | — |
+
 ## Run lifecycle
 
 `run_workflow()` creates a `workflow_runs` row and drives it through:
