@@ -102,6 +102,40 @@ python verify_golive.py        # import + registry + DB gate (CI pre-deploy chec
 pytest -q                      # full suite (hermetic SQLite, dry-run)
 ```
 
+## Production smoke test runner
+
+`scripts/smoke_echo_govcon_prod.sh` runs the full Echo GovCon production loop
+against a deployed instance and prints a PASS/FAIL summary with a GO/NO-GO exit
+code (`0` = GO, `1` = NO-GO, `2` = usage error). Run it from a shell that has
+network egress to the Railway service (e.g. your machine or a `railway run`
+shell):
+
+```bash
+BASE=https://<echo>.up.railway.app ECHO_API_KEY=<production key> \
+  bash scripts/smoke_echo_govcon_prod.sh
+```
+
+Requires `bash`, `curl`, and `jq`. It fails fast if `BASE` or `ECHO_API_KEY` is
+missing and never prints the API key.
+
+It checks, in order: (1) health, (2) db-health (masked DB host + `echo_` tables),
+(3) protected route without key → 401, (4) with key → 200, (5)
+`live_publishing_enabled=false`, (6) GovCon registry lists the 6 pack workflows,
+(7) run `govcon_daily_brief`, (8) run record persisted, (9) approval draft
+created, (10) approve the draft, (11) `draft_approved` analytics event, (12)
+create a Sturgeon handoff, (13) handoff record logged, (14)
+`sturgeon_handoff_created` analytics event, (15) run `weekly_performance_tracker`,
+(16) no auto-publish (0 published + live publishing off).
+
+**Production-safety:** it never enables live publishing and asserts it stays off;
+it only creates review drafts + one intake handoff (both labelled `[SMOKE TEST]`)
+and approves a draft (status/analytics only — approval does **not** publish). It
+does write a small number of rows (one run, one draft, one handoff, analytics
+events) to the connected DB — inherent to an end-to-end smoke test. If
+`STURGEON_API_URL` is configured server-side, the `[SMOKE TEST]` handoff is
+forwarded to Sturgeon's intake (never touching billing/credits/human-review);
+delete that record afterward.
+
 ## Known limitations
 
 - AI copy is placeholder text unless `ANTHROPIC_API_KEY` is set (workflows still
