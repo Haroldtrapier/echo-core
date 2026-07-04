@@ -96,7 +96,8 @@ back to their run without changing the `run()` signature.
 
 **Retry engine:** `max_retries` comes from the workflow class attr, the payload
 (`max_retries`), or defaults to 0. Retries run inline and deterministically, so
-the API caller receives the final outcome; each attempt bumps `retry_count`.
+the API caller receives the final outcome; `retry_count` counts retries consumed
+(0 = only the initial attempt ran).
 
 ## Approval queue
 

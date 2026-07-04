@@ -269,6 +269,47 @@ def test_retry_count_recorded_on_success(client, auth):
     assert run["status"] == "succeeded"
 
 
+def test_retry_engine_counts_retries_not_attempts():
+    """retry_count is retries consumed: 0 when max_retries=0, N on Nth-retry success."""
+    from echo.core import registry
+    from echo.core.runner import run_workflow
+    from echo.core.workflow import BaseWorkflow, WorkflowResult
+    from echo.db import db_session
+
+    calls = {"n": 0}
+
+    @registry.register
+    class _FlakyWorkflow(BaseWorkflow):
+        slug = "_test_flaky"
+        name = "Flaky Test"
+        description = "fails twice then succeeds"
+
+        def run(self, db, payload):
+            calls["n"] += 1
+            if calls["n"] <= int(payload.get("fail_times", 0)):
+                raise RuntimeError("boom")
+            return WorkflowResult(success=True, data={"attempt": calls["n"]})
+
+    try:
+        # No retries allowed → one attempt, failure, retry_count 0
+        calls["n"] = 0
+        with db_session() as db:
+            run, res = run_workflow(db, "_test_flaky", {"fail_times": 5}, max_retries=0)
+            assert run.status == "failed"
+            assert run.retry_count == 0
+            assert run.completed_at is not None
+
+        # Fails twice, succeeds on the 2nd retry (3rd attempt) → retry_count 2
+        calls["n"] = 0
+        with db_session() as db:
+            run, res = run_workflow(db, "_test_flaky", {"fail_times": 2}, max_retries=3)
+            assert res.success is True
+            assert run.status == "succeeded"
+            assert run.retry_count == 2
+    finally:
+        registry._REGISTRY.pop("_test_flaky", None)
+
+
 # ─── Auth guard on the whole pack ─────────────────────────────────────────────
 
 def test_govcon_endpoints_require_auth(client):

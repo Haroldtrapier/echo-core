@@ -89,23 +89,27 @@ def run_workflow(
     # back to this run, without changing the run() signature.
     exec_payload = {**payload, "_run_id": run.id, "_tenant_id": tenant_id, "_user_id": user_id}
 
-    attempt = 0
+    # ``retries`` counts RETRIES consumed (0 = only the initial attempt ran), so a
+    # failure with max_retries=0 records retry_count=0, not 1.
+    retries = 0
     last_exc: Exception | None = None
     result: WorkflowResult | None = None
-    while attempt <= max_retries:
+    while True:
         try:
             result = instance.run(db, exec_payload)
             last_exc = None
             break
         except Exception as exc:  # noqa: BLE001 — a failed workflow must not crash the API
             last_exc = exc
-            log.exception("Workflow %s run=%s attempt=%d failed: %s", slug, run.id, attempt, exc)
-            attempt += 1
-            run.retry_count = attempt
-            if attempt <= max_retries:
+            log.exception("Workflow %s run=%s retries=%d failed: %s", slug, run.id, retries, exc)
+            if retries < max_retries:
+                retries += 1
+                run.retry_count = retries
                 run.status = "retrying"
                 run.updated_at = _utcnow()
                 db.commit()
+                continue
+            break
 
     now = _utcnow()
     if last_exc is not None:
