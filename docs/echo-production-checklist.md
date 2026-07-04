@@ -2,6 +2,44 @@
 
 Status of the Echo Core + Echo GovCon production MVP.
 
+## ⛔ BLOCKED: dedicated Echo production database
+
+Echo Core **must run on its own database**, separate from Sturgeon.
+
+- **Do NOT use the `sturgeon-ai` Supabase project for Echo migrations.** It is the
+  live Sturgeon production database — it holds `users`, `profiles`, `subscriptions`,
+  `proposals`, `proposal_credits`, `proposal_purchases`, `proposal_reviews`,
+  `human_review_requests`. Echo's migrations create generic `workflow_runs` /
+  `approvals` tables and `CREATE OR REPLACE` a shared `set_updated_at` trigger
+  function that Sturgeon's tables depend on — applying them there would modify
+  protected Sturgeon infrastructure. **Prohibited.**
+- **Current blocker:** creating the dedicated `echo-core-prod` Supabase project is
+  blocked by the org's **2-active-free-project limit** (Trapier Management LLC).
+  Resolve by upgrading the org to Supabase Pro (recommended — free projects also
+  auto-pause after ~7 days idle, unsuitable for production) or freeing a slot
+  (do **not** pause `sturgeon-ai`).
+
+### Final database steps (once the project limit is resolved)
+1. Create dedicated project `echo-core-prod`.
+2. Apply `0001 → 0002 → 0003 → 0004 → 0005` in order (idempotent, additive).
+3. Run the verification query (see "Post-migration verification" below).
+4. Set Railway `DATABASE_URL` to the new project; keep `ECHO_ALLOW_LIVE_PUBLISH=false`.
+5. Redeploy; run `scripts/smoke_echo_govcon_prod.sh`.
+
+## Phase 2 scaffolding (flag-gated — all OFF by default)
+
+Implemented behind safe switches; nothing production-impacting is on by default.
+
+| Feature | Flag / default | Guard |
+| --- | --- | --- |
+| Recurring schedules (daily brief, weekly tracker) | `ECHO_SCHEDULER_ENABLED=false` | double-gated: global flag **and** per-row `enabled` |
+| Approval-first publishing + connectors | dry-run default | live only if approval approved/ready **and** `ECHO_ALLOW_LIVE_PUBLISH=true` |
+| GA4 conversion tracking (Measurement Protocol) | `GA4_MEASUREMENT_ID`/`GA4_API_SECRET` unset | no-op provider; analytics still recorded |
+| NRS / SEMA disaster adapters | `NRS_API_URL`/`SEMA_API_URL` unset | disabled → `[]`; `*_USE_MOCK=true` for labelled mock only |
+
+New migration `0005_echo_scheduler.sql` (table `echo_schedules`) — apply to the
+dedicated Echo DB only, **not** to `sturgeon-ai`.
+
 ## Completed
 
 - [x] **Workflow registry** — in-code registry + `echo_workflows` DB mirror with all
@@ -74,8 +112,11 @@ Run in order against Supabase/Postgres (idempotent):
 supabase/migrations/0001_echo_core_schema.sql
 supabase/migrations/0002_cockpit_read_models.sql
 supabase/migrations/0003_echo_jobs.sql
-supabase/migrations/0004_echo_govcon.sql   ← new (this MVP)
+supabase/migrations/0004_echo_govcon.sql   ← MVP (PR #7)
+supabase/migrations/0005_echo_scheduler.sql ← Phase 2 (echo_schedules)
 ```
+
+> Apply to the **dedicated Echo database only** — never to `sturgeon-ai`.
 
 `0004` adds `echo_workflows`, `echo_analytics_events`, `echo_sturgeon_handoffs`,
 and extends `approvals` + `workflow_runs`. The app also calls

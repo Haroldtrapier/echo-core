@@ -48,13 +48,16 @@ async def startup() -> None:
         log.warning("DB not reachable at startup (will retry on first request): %s", exc)
     from echo.core.registry import sync_registry, workflow_count
     log.info("Registered workflows: %d", workflow_count())
-    # Mirror the in-code registry into the echo_workflows table (best-effort).
+    # Mirror the in-code registry into the echo_workflows table (best-effort),
+    # and seed the default (disabled) recurring schedules.
     try:
         from echo.db import db_session
+        from echo.scheduling import sync_default_schedules
         with db_session() as db:
             sync_registry(db)
+            sync_default_schedules(db)
     except Exception as exc:  # noqa: BLE001
-        log.warning("Registry sync skipped at startup: %s", exc)
+        log.warning("Registry/schedule sync skipped at startup: %s", exc)
 
 
 @app.on_event("shutdown")

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Echo GovCon — Ops Dashboard</title>
+<style>
+  :root { --bg:#0b1020; --panel:#151c33; --panel2:#1d2745; --ink:#e8ecf7;
+          --mut:#8b97b8; --acc:#5b8cff; --ok:#3ecf8e; --warn:#ffb84d; --bad:#ff6b6b; --line:#2a3458; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; gap:12px; align-items:center; padding:14px 20px; background:var(--panel);
+           border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; letter-spacing:.5px; }
+  header .grow { flex:1; }
+  input, button { font:inherit; color:var(--ink); }
+  input { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:7px 10px; }
+  button { background:var(--acc); border:0; border-radius:8px; padding:7px 12px; color:#fff; cursor:pointer; }
+  .wrap { padding:20px; max-width:1200px; margin:0 auto; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .card .n { font-size:22px; font-weight:700; } .card .l { color:var(--mut); font-size:12px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--mut); margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .on { background:#10311f; color:var(--ok); } .off { background:#3a1717; color:var(--bad); }
+  .s-pending { background:#3a2f12; color:var(--warn); } .s-approved,.s-ready { background:#13314a; color:var(--acc); }
+  .s-succeeded,.s-completed { background:#10311f; color:var(--ok); } .s-failed,.s-rejected { background:#3a1717; color:var(--bad); }
+  .mut { color:var(--mut); } .mono { font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 ECHO GOVCON — OPS DASHBOARD</h1>
+  <span class="mut" id="conn">not connected</span>
+  <span class="grow"></span>
+  <input id="apiBase" placeholder="API base e.g. https://echo.up.railway.app" size="32" />
+  <input id="apiKey" placeholder="x-echo-key" type="password" size="18" />
+  <button onclick="saveConn()">Connect</button>
+  <button onclick="loadAll()">Refresh</button>
+</header>
+
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+  <div class="panel"><h2>Scheduler</h2><div id="scheduler">—</div></div>
+  <div class="panel"><h2>Approval Queue (pending)</h2><div id="approvals">—</div></div>
+  <div class="panel"><h2>Workflow Runs (recent)</h2><div id="runs">—</div></div>
+  <div class="panel"><h2>Sturgeon Handoffs</h2><div id="handoffs">—</div></div>
+  <div class="panel"><h2>Analytics Events (recent)</h2><div id="events">—</div></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g,
+  c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+let CFG = { base: localStorage.getItem("echo_base")||"", key: localStorage.getItem("echo_key")||"" };
+
+async function api(path){
+  const r = await fetch(CFG.base.replace(/\/$/,"") + path, { headers: { "x-echo-key": CFG.key } });
+  if(!r.ok) throw new Error(await r.text() || r.status);
+  return r.json();
+}
+function saveConn(){
+  CFG.base=$("#apiBase").value.trim(); CFG.key=$("#apiKey").value.trim();
+  localStorage.setItem("echo_base",CFG.base); localStorage.setItem("echo_key",CFG.key);
+  $("#conn").textContent="connected"; loadAll();
+}
+function pill(s){ return `<span class="pill s-${esc(s)}">${esc(s)}</span>`; }
+function tbl(head, rows){ return `<table><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr>${rows.join("")}</table>`; }
+
+async function loadAll(){
+  if(!CFG.base || !CFG.key){ $("#scheduler").textContent="Enter API base + key, then Connect."; return; }
+  await Promise.all([loadScheduler(), loadApprovals(), loadRuns(), loadHandoffs(), loadEvents()]);
+}
+
+async function loadScheduler(){
+  try{
+    const d = await api("/api/v1/govcon/scheduler");
+    const state = d.scheduler_enabled ? `<span class="pill on">ENABLED</span>` : `<span class="pill off">DISABLED</span>`;
+    const rows = (d.schedules||[]).map(s=>`<tr><td>${esc(s.name)}</td><td class="mono">${esc(s.workflow_slug)}</td>
+      <td>${s.interval_minutes}m</td><td>${s.enabled?'<span class="pill on">on</span>':'<span class="pill off">off</span>'}</td>
+      <td class="mut">${esc(s.last_run_at||'—')}</td></tr>`);
+    $("#scheduler").innerHTML = `<div style="margin-bottom:8px">Global scheduler: ${state}</div>` +
+      tbl(["Name","Workflow","Interval","Enabled","Last run"], rows);
+  }catch(e){ $("#scheduler").innerHTML=`<span class="mut">Error: ${esc(e.message)}</span>`; }
+}
+async function loadApprovals(){
+  try{
+    const d = await api("/api/v1/govcon/approvals?status=pending&limit=50");
+    const rows = (d.approvals||[]).map(a=>`<tr><td>${esc(a.reason||'—')}</td><td>${esc(a.draft_type||'—')}</td>
+      <td>${pill(a.status)}</td><td class="mono">${esc(a.content_post_id||'—')}</td>
+      <td class="mut">${esc((a.created_at||'').slice(0,19))}</td></tr>`);
+    $("#approvals").innerHTML = tbl(["Source","Type","Status","Post","Created"], rows.length?rows:[`<tr><td class="mut">none</td></tr>`]);
+    cardVal("Pending drafts", d.total ?? (d.approvals||[]).length);
+  }catch(e){ $("#approvals").innerHTML=`<span class="mut">Error: ${esc(e.message)}</span>`; }
+}
+async function loadRuns(){
+  try{
+    const d = await api("/api/v1/runs?limit=15");
+    const rows = (d.runs||[]).map(r=>`<tr><td class="mono">${esc(r.slug)}</td><td>${pill(r.status)}</td>
+      <td class="mut">${esc(r.triggered_by||'—')}</td><td class="mut">${esc((r.created_at||'').slice(0,19))}</td></tr>`);
+    $("#runs").innerHTML = tbl(["Workflow","Status","Trigger","Created"], rows.length?rows:[`<tr><td class="mut">none</td></tr>`]);
+    cardVal("Total runs", d.total ?? (d.runs||[]).length);
+  }catch(e){ $("#runs").innerHTML=`<span class="mut">Error: ${esc(e.message)}</span>`; }
+}
+async function loadHandoffs(){
+  try{
+    const d = await api("/api/v1/govcon/sturgeon/handoffs?limit=25");
+    const rows = (d.handoffs||[]).map(h=>`<tr><td>${esc(h.opportunity_title)}</td><td>${esc(h.agency||'—')}</td>
+      <td>${pill(h.status)}</td><td class="mut">${esc((h.created_at||'').slice(0,19))}</td></tr>`);
+    $("#handoffs").innerHTML = tbl(["Opportunity","Agency","Status","Created"], rows.length?rows:[`<tr><td class="mut">none</td></tr>`]);
+    cardVal("Handoffs", d.total ?? (d.handoffs||[]).length);
+    cardVal("Fwd enabled", d.forwarding_enabled ? "yes" : "no");
+  }catch(e){ $("#handoffs").innerHTML=`<span class="mut">Error: ${esc(e.message)}</span>`; }
+}
+async function loadEvents(){
+  try{
+    const d = await api("/api/v1/govcon/analytics/events?limit=25");
+    const rows = (d.events||[]).map(e=>`<tr><td class="mono">${esc(e.event_type)}</td><td class="mono">${esc(e.workflow_id||'—')}</td>
+      <td class="mut">${esc((e.created_at||'').slice(0,19))}</td></tr>`);
+    $("#events").innerHTML = tbl(["Event","Workflow","When"], rows.length?rows:[`<tr><td class="mut">none</td></tr>`]);
+  }catch(e){ $("#events").innerHTML=`<span class="mut">Error: ${esc(e.message)}</span>`; }
+}
+
+const _cards = {};
+function cardVal(label, val){ _cards[label]=val;
+  $("#cards").innerHTML = Object.entries(_cards).map(([l,v])=>
+    `<div class="card"><div class="n">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join(""); }
+
+(function init(){ $("#apiBase").value=CFG.base; $("#apiKey").value=CFG.key;
+  if(CFG.base && CFG.key){ $("#conn").textContent="connected"; loadAll(); } })();
+</script>
+</body>
+</html>
