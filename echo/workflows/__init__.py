@@ -12,3 +12,6 @@ from echo.workflows import (  # noqa: F401
     social_post,
     produce_media,
 )
+
+# Echo GovCon automation pack (approval-first GovCon recipes)
+from echo.workflows import govcon  # noqa: F401,E402

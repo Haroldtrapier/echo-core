@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Echo GovCon — Approval Queue</title>
+<style>
+  :root { --bg:#0b1020; --panel:#151c33; --panel2:#1d2745; --ink:#e8ecf7;
+          --mut:#8b97b8; --acc:#5b8cff; --ok:#3ecf8e; --warn:#ffb84d; --bad:#ff6b6b;
+          --line:#2a3458; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; gap:12px; align-items:center; padding:14px 20px; background:var(--panel);
+           border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0; letter-spacing:.5px; }
+  header .grow { flex:1; }
+  input, select, button, textarea { font:inherit; color:var(--ink); }
+  input, select, textarea { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:7px 10px; }
+  button { background:var(--acc); border:0; border-radius:8px; padding:7px 12px; color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--mut); }
+  button.ok { background:var(--ok); } button.bad { background:var(--bad); } button.warn { background:var(--warn); color:#231a06; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .wrap { padding:20px; max-width:1200px; margin:0 auto; display:grid; grid-template-columns:360px 1fr; gap:16px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+  .item.active { border-color:var(--acc); background:var(--panel2); }
+  .item .t { font-weight:600; } .item .m { color:var(--mut); font-size:12px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .s-pending { background:#3a2f12; color:var(--warn); }
+  .s-approved,.s-ready { background:#13314a; color:var(--acc); }
+  .s-rejected { background:#3a1717; color:var(--bad); }
+  .mut { color:var(--mut); } .mono { font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:10px 0; }
+  pre.draft { white-space:pre-wrap; background:var(--panel2); border:1px solid var(--line);
+              border-radius:8px; padding:12px; max-height:52vh; overflow:auto; }
+  textarea.edit { width:100%; min-height:200px; }
+  .toast { position:fixed; right:16px; bottom:16px; background:var(--panel2); border:1px solid var(--line);
+           padding:10px 14px; border-radius:10px; max-width:360px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>✅ ECHO GOVCON — APPROVAL QUEUE</h1>
+  <span class="mut" id="conn">not connected</span>
+  <span class="grow"></span>
+  <input id="apiBase" placeholder="API base e.g. https://echo.up.railway.app" size="34" />
+  <input id="apiKey" placeholder="x-echo-key" type="password" size="18" />
+  <input id="reviewer" placeholder="your name" size="12" />
+  <button onclick="saveConn()">Connect</button>
+</header>
+
+<div class="wrap">
+  <section class="panel">
+    <div class="row">
+      <select id="statusFilter" onchange="loadList()">
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="ready">Ready</option>
+        <option value="rejected">Rejected</option>
+        <option value="all">All</option>
+      </select>
+      <button class="ghost" onclick="loadList()">Refresh</button>
+    </div>
+    <div id="list">Connect to load the queue.</div>
+  </section>
+
+  <section class="panel" id="detail"><span class="mut">Select a draft to review.</span></section>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+// HTML-escape any API-provided value before it is placed into innerHTML. Draft
+// titles/content come from workflow output (some of it caller-supplied), so this
+// prevents stored XSS that could exfiltrate the operator's API key.
+function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g,
+  c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+let CFG = { base: localStorage.getItem("echo_base")||"", key: localStorage.getItem("echo_key")||"",
+            who: localStorage.getItem("echo_who")||"" };
+let CURRENT = null;
+
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.remove("hidden");
+  setTimeout(()=>t.classList.add("hidden"), 2600); }
+
+async function api(path, opts={}){
+  const r = await fetch(CFG.base.replace(/\/$/,"") + path, {
+    method: opts.method||"GET",
+    headers: { "x-echo-key": CFG.key, "Content-Type":"application/json" },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if(!r.ok){ throw new Error((await r.text())||r.status); }
+  return r.status===204 ? {} : r.json();
+}
+
+function saveConn(){
+  CFG.base=$("#apiBase").value.trim(); CFG.key=$("#apiKey").value.trim(); CFG.who=$("#reviewer").value.trim();
+  localStorage.setItem("echo_base",CFG.base); localStorage.setItem("echo_key",CFG.key);
+  localStorage.setItem("echo_who",CFG.who);
+  $("#conn").textContent="connected"; loadList();
+}
+
+async function loadList(){
+  const st = $("#statusFilter").value;
+  try{
+    const d = await api(`/api/v1/govcon/approvals?status=${st}&limit=200`);
+    const items = d.approvals||[];
+    $("#list").innerHTML = items.length ? items.map(a=>`
+      <div class="item" id="it-${esc(a.id)}" onclick="openDraft('${esc(a.id)}')">
+        <div class="t">${esc(a.reason||a.draft_type||"draft")}</div>
+        <div class="m">
+          <span class="pill s-${esc(a.status)}">${esc(a.status)}</span>
+          &nbsp;${esc(a.draft_type||"—")} · ${a.created_at? esc(new Date(a.created_at).toLocaleString()):""}
+        </div>
+      </div>`).join("") : `<span class="mut">No ${esc(st)} drafts.</span>`;
+  }catch(e){ $("#list").innerHTML = `<span class="mut">Error: ${esc(e.message)}</span>`; }
+}
+
+async function openDraft(id){
+  CURRENT=id;
+  document.querySelectorAll(".item").forEach(el=>el.classList.remove("active"));
+  const el=$("#it-"+id); if(el) el.classList.add("active");
+  try{
+    const a = await api(`/api/v1/govcon/approvals/${id}`);
+    const pending = a.status==="pending", approved=a.status==="approved";
+    const id_ = esc(a.id);
+    $("#detail").innerHTML = `
+      <div class="row"><span class="pill s-${esc(a.status)}">${esc(a.status)}</span>
+        <span class="mono mut">${id_}</span></div>
+      <div class="m mut">Source: <b>${esc(a.reason||"—")}</b> · type ${esc(a.draft_type||"—")}
+        · post ${esc(a.content_post_id||"—")}</div>
+      <div class="m mut">Generated: ${a.created_at? esc(new Date(a.created_at).toLocaleString()):"—"}
+        ${a.reviewed_by? " · reviewed by "+esc(a.reviewed_by)+" @ "+esc(new Date(a.reviewed_at).toLocaleString()):""}</div>
+      ${pending
+        ? `<textarea class="edit" id="editBody">${esc(a.draft_content||"")}</textarea>
+           <div class="row">
+             <button class="ghost" onclick="saveEdit('${id_}')">Save edits</button>
+             <button class="ok" onclick="decide('${id_}','approve')">Approve</button>
+             <button class="bad" onclick="decide('${id_}','reject')">Reject</button>
+           </div>`
+        : `<pre class="draft">${esc(a.draft_content||"")}</pre>
+           ${approved? `<div class="row"><button class="warn" onclick="markReady('${id_}')">Mark ready to publish/send</button></div>`:""}`}
+    `;
+  }catch(e){ $("#detail").innerHTML=`<span class="mut">Error: ${esc(e.message)}</span>`; }
+}
+
+function reviewer(){ return CFG.who || prompt("Your name (reviewer)?") || "admin"; }
+
+async function saveEdit(id){
+  try{ await api(`/api/v1/govcon/approvals/${id}`,{method:"PATCH",body:{draft_content:$("#editBody").value}});
+       toast("Draft saved"); openDraft(id); }
+  catch(e){ toast("Error: "+e.message); }
+}
+async function decide(id, action){
+  try{ await api(`/api/v1/govcon/approvals/${id}/${action}`,{method:"POST",body:{reviewed_by:reviewer()}});
+       toast(action==="approve"?"Approved":"Rejected"); await loadList(); openDraft(id); }
+  catch(e){ toast("Error: "+e.message); }
+}
+async function markReady(id){
+  try{ await api(`/api/v1/govcon/approvals/${id}/mark-ready`,{method:"POST",body:{marked_by:reviewer()}});
+       toast("Marked ready"); await loadList(); openDraft(id); }
+  catch(e){ toast("Error: "+e.message); }
+}
+
+(function init(){
+  $("#apiBase").value=CFG.base; $("#apiKey").value=CFG.key; $("#reviewer").value=CFG.who;
+  if(CFG.base && CFG.key){ $("#conn").textContent="connected"; loadList(); }
+})();
+</script>
+</body>
+</html>

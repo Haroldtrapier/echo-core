@@ -61,6 +61,20 @@ SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
 MEDIA_BUCKET: str = os.getenv("MEDIA_BUCKET", "echo-media")
 
+# ── Tenancy ───────────────────────────────────────────────────────────────────
+# Default workspace/tenant used when a caller does not supply one. Echo is
+# single-tenant-by-default; multi-tenant callers pass tenant_id explicitly.
+DEFAULT_TENANT_ID: str = os.getenv("DEFAULT_TENANT_ID", "imani-internal")
+
+# ── Sturgeon handoff ──────────────────────────────────────────────────────────
+# When STURGEON_API_URL is set, Echo GovCon forwards handoffs to Sturgeon's
+# intake endpoint. When unset, handoffs are stored locally (status=pending) for
+# Sturgeon to pull — no network call is made, so local build/test never needs it.
+STURGEON_API_URL: str = os.getenv("STURGEON_API_URL", "")
+STURGEON_API_KEY: str = os.getenv("STURGEON_API_KEY", "")
+# Public URL a human clicks to open the opportunity in Sturgeon (used in CTAs).
+STURGEON_APP_URL: str = os.getenv("STURGEON_APP_URL", "https://sturgeon.ai")
+
 # ── Worker ────────────────────────────────────────────────────────────────────
 # How often (seconds) the background worker ticks the scheduler
 WORKER_TICK_INTERVAL: int = int(os.getenv("WORKER_TICK_INTERVAL", "60"))

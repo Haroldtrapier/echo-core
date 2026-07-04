@@ -70,13 +70,20 @@ class WorkflowRun(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
     workflow_slug: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: queued | running | approval_required | approved | rejected |
+    #: succeeded | completed | failed | retrying
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    tenant_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     payload: Mapped[Any] = mapped_column(JSON, nullable=True)
     result: Mapped[Any] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, default=0)
     triggered_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 # ─── Approvals ────────────────────────────────────────────────────────────────
@@ -93,6 +100,16 @@ class Approval(Base):
     requested_by: Mapped[str] = mapped_column(String(255), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    #: Kind of AI-generated draft this approval gates — one of
+    #: brief | linkedin_post | email | alert | handoff (free-form; nullable for
+    #: legacy publish-gate approvals that carry no draft body).
+    draft_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: The reviewable draft body (the content a human approves before it ships).
+    draft_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: post_id of the linked ContentItem, when the draft is also a content row.
+    content_post_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     decision_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     resume_payload: Mapped[Any] = mapped_column(JSON, nullable=True)
@@ -290,6 +307,110 @@ class EchoExecutionAudit(Base):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     request_metadata: Mapped[Any] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+# ─── Echo Workflow Registry (DB mirror) ───────────────────────────────────────
+
+
+class EchoWorkflow(Base):
+    """Durable mirror of the in-code workflow registry.
+
+    The authoritative registry is the Python decorator registry (echo.core.registry);
+    this table is synced from it on startup so dashboards, entitlement checks, and
+    schedulers can read workflow metadata (tier, product area, approval policy)
+    without importing Python. ``workflow_id`` == the code ``slug``.
+    """
+
+    __tablename__ = "echo_workflows"
+    __table_args__ = (
+        Index("ix_echo_workflows_product_area", "product_area"),
+        Index("ix_echo_workflows_enabled", "enabled"),
+    )
+
+    workflow_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    workflow_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    product_area: Mapped[str] = mapped_column(String(64), nullable=False, default="echo_core")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trigger_type: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")
+    input_schema: Mapped[Any] = mapped_column(JSON, nullable=True)
+    output_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approval_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    connector_targets: Mapped[Any] = mapped_column(JSON, nullable=True)
+    required_tier: Mapped[str] = mapped_column(String(32), nullable=False, default="free")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+# ─── Echo Analytics Events ────────────────────────────────────────────────────
+
+
+class EchoAnalyticsEvent(Base):
+    """Append-only analytics event stream for the Echo loop.
+
+    Every meaningful state transition (workflow_started/completed/failed,
+    draft_created/approved/rejected, draft_published_or_marked_ready,
+    sturgeon_handoff_created, lead_nurture_created) writes one immutable row here.
+    """
+
+    __tablename__ = "echo_analytics_events"
+    __table_args__ = (
+        Index("ix_echo_analytics_events_type", "event_type"),
+        Index("ix_echo_analytics_events_workflow", "workflow_id"),
+        Index("ix_echo_analytics_events_run", "workflow_run_id"),
+        Index("ix_echo_analytics_events_tenant", "tenant_id"),
+        Index("ix_echo_analytics_events_created", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    workflow_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    workflow_run_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    event_metadata: Mapped[Any] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+# ─── Echo Sturgeon Handoffs ───────────────────────────────────────────────────
+
+
+class EchoSturgeonHandoff(Base):
+    """A GovCon opportunity handed off from Echo GovCon into Sturgeon AI.
+
+    Minimal, safe handoff record. If ``STURGEON_API_URL`` is configured the
+    handoff is also POSTed to Sturgeon and ``forwarded`` is set; otherwise it is
+    stored locally as ``pending`` for Sturgeon to pull.
+    """
+
+    __tablename__ = "echo_sturgeon_handoffs"
+    __table_args__ = (
+        Index("ix_echo_sturgeon_handoffs_tenant", "tenant_id"),
+        Index("ix_echo_sturgeon_handoffs_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, default="imani-internal")
+    workflow_run_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    approval_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False, default="echo_govcon")
+    opportunity_title: Mapped[str] = mapped_column(String(512), nullable=False)
+    agency: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    solicitation_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    due_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recommended_next_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: pending → stored locally, awaiting Sturgeon pull
+    #: forwarded → POSTed to Sturgeon successfully
+    #: failed → forward attempted but errored
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    sturgeon_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    forward_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extra: Mapped[Any] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 # ── Session helpers ───────────────────────────────────────────────────────────
