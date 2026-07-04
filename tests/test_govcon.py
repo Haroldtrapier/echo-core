@@ -310,6 +310,39 @@ def test_retry_engine_counts_retries_not_attempts():
         registry._REGISTRY.pop("_test_flaky", None)
 
 
+def test_negative_max_retries_is_clamped_not_crashed():
+    """A negative payload.max_retries clamps to 0 — the run fails cleanly, no 500."""
+    from echo.core import registry
+    from echo.core.runner import run_workflow
+    from echo.core.workflow import BaseWorkflow, WorkflowResult
+    from echo.db import db_session
+
+    @registry.register
+    class _AlwaysFails(BaseWorkflow):
+        slug = "_test_neg_retry"
+        name = "Neg"
+        description = "always fails"
+
+        def run(self, db, payload):
+            raise RuntimeError("boom")
+
+    try:
+        with db_session() as db:
+            run, res = run_workflow(db, "_test_neg_retry", {"max_retries": -5})
+            assert res.success is False
+            assert run.status == "failed"      # not stuck in "running"
+            assert run.retry_count == 0
+    finally:
+        registry._REGISTRY.pop("_test_neg_retry", None)
+
+
+def test_weekly_report_is_registered_as_approval_gated(client, auth):
+    """The weekly report queues a draft Approval, so its registry policy says so."""
+    reg = client.get("/api/v1/govcon/workflows/registry", headers=auth).json()
+    wt = next(w for w in reg["workflows"] if w["workflow_id"] == "weekly_performance_tracker")
+    assert wt["approval_required"] is True
+
+
 # ─── Auth guard on the whole pack ─────────────────────────────────────────────
 
 def test_govcon_endpoints_require_auth(client):

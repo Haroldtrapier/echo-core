@@ -27,7 +27,9 @@ class WeeklyPerformanceTrackerWorkflow(pack.GovConWorkflow):
     )
     trigger_type = "scheduled"
     output_type = "report"
-    approval_required = False
+    # Every run queues a draft Approval via pack.queue_draft (the report is
+    # reviewed before it's shared), so the registry policy must reflect that.
+    approval_required = True
     connector_targets = ("slack",)
     input_schema = {"days_back": "int? — window in days (default 7)"}
 

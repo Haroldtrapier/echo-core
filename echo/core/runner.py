@@ -61,6 +61,9 @@ def run_workflow(
         max_retries = int(
             getattr(cls, "max_retries", 0) or payload.get("max_retries", 0) or 0
         )
+    # Clamp: a negative max_retries (e.g. supplied via payload) means "no retries",
+    # never a skipped run loop.
+    max_retries = max(0, max_retries)
 
     run = WorkflowRun(
         workflow_slug=slug,

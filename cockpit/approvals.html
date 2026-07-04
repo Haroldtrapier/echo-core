@@ -71,6 +71,11 @@
 
 <script>
 const $ = s => document.querySelector(s);
+// HTML-escape any API-provided value before it is placed into innerHTML. Draft
+// titles/content come from workflow output (some of it caller-supplied), so this
+// prevents stored XSS that could exfiltrate the operator's API key.
+function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g,
+  c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 let CFG = { base: localStorage.getItem("echo_base")||"", key: localStorage.getItem("echo_key")||"",
             who: localStorage.getItem("echo_who")||"" };
 let CURRENT = null;
@@ -101,14 +106,14 @@ async function loadList(){
     const d = await api(`/api/v1/govcon/approvals?status=${st}&limit=200`);
     const items = d.approvals||[];
     $("#list").innerHTML = items.length ? items.map(a=>`
-      <div class="item" id="it-${a.id}" onclick="openDraft('${a.id}')">
-        <div class="t">${(a.reason||a.draft_type||"draft")}</div>
+      <div class="item" id="it-${esc(a.id)}" onclick="openDraft('${esc(a.id)}')">
+        <div class="t">${esc(a.reason||a.draft_type||"draft")}</div>
         <div class="m">
-          <span class="pill s-${a.status}">${a.status}</span>
-          &nbsp;${a.draft_type||"—"} · ${a.created_at? new Date(a.created_at).toLocaleString():""}
+          <span class="pill s-${esc(a.status)}">${esc(a.status)}</span>
+          &nbsp;${esc(a.draft_type||"—")} · ${a.created_at? esc(new Date(a.created_at).toLocaleString()):""}
         </div>
-      </div>`).join("") : `<span class="mut">No ${st} drafts.</span>`;
-  }catch(e){ $("#list").innerHTML = `<span class="mut">Error: ${e.message}</span>`; }
+      </div>`).join("") : `<span class="mut">No ${esc(st)} drafts.</span>`;
+  }catch(e){ $("#list").innerHTML = `<span class="mut">Error: ${esc(e.message)}</span>`; }
 }
 
 async function openDraft(id){
@@ -118,24 +123,25 @@ async function openDraft(id){
   try{
     const a = await api(`/api/v1/govcon/approvals/${id}`);
     const pending = a.status==="pending", approved=a.status==="approved";
+    const id_ = esc(a.id);
     $("#detail").innerHTML = `
-      <div class="row"><span class="pill s-${a.status}">${a.status}</span>
-        <span class="mono mut">${a.id}</span></div>
-      <div class="m mut">Source: <b>${a.reason||"—"}</b> · type ${a.draft_type||"—"}
-        · post ${a.content_post_id||"—"}</div>
-      <div class="m mut">Generated: ${a.created_at? new Date(a.created_at).toLocaleString():"—"}
-        ${a.reviewed_by? " · reviewed by "+a.reviewed_by+" @ "+new Date(a.reviewed_at).toLocaleString():""}</div>
+      <div class="row"><span class="pill s-${esc(a.status)}">${esc(a.status)}</span>
+        <span class="mono mut">${id_}</span></div>
+      <div class="m mut">Source: <b>${esc(a.reason||"—")}</b> · type ${esc(a.draft_type||"—")}
+        · post ${esc(a.content_post_id||"—")}</div>
+      <div class="m mut">Generated: ${a.created_at? esc(new Date(a.created_at).toLocaleString()):"—"}
+        ${a.reviewed_by? " · reviewed by "+esc(a.reviewed_by)+" @ "+esc(new Date(a.reviewed_at).toLocaleString()):""}</div>
       ${pending
-        ? `<textarea class="edit" id="editBody">${(a.draft_content||"").replace(/</g,"&lt;")}</textarea>
+        ? `<textarea class="edit" id="editBody">${esc(a.draft_content||"")}</textarea>
            <div class="row">
-             <button class="ghost" onclick="saveEdit('${a.id}')">Save edits</button>
-             <button class="ok" onclick="decide('${a.id}','approve')">Approve</button>
-             <button class="bad" onclick="decide('${a.id}','reject')">Reject</button>
+             <button class="ghost" onclick="saveEdit('${id_}')">Save edits</button>
+             <button class="ok" onclick="decide('${id_}','approve')">Approve</button>
+             <button class="bad" onclick="decide('${id_}','reject')">Reject</button>
            </div>`
-        : `<pre class="draft">${(a.draft_content||"").replace(/</g,"&lt;")}</pre>
-           ${approved? `<div class="row"><button class="warn" onclick="markReady('${a.id}')">Mark ready to publish/send</button></div>`:""}`}
+        : `<pre class="draft">${esc(a.draft_content||"")}</pre>
+           ${approved? `<div class="row"><button class="warn" onclick="markReady('${id_}')">Mark ready to publish/send</button></div>`:""}`}
     `;
-  }catch(e){ $("#detail").innerHTML=`<span class="mut">Error: ${e.message}</span>`; }
+  }catch(e){ $("#detail").innerHTML=`<span class="mut">Error: ${esc(e.message)}</span>`; }
 }
 
 function reviewer(){ return CFG.who || prompt("Your name (reviewer)?") || "admin"; }
