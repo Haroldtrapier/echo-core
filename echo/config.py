@@ -75,6 +75,28 @@ STURGEON_API_KEY: str = os.getenv("STURGEON_API_KEY", "")
 # Public URL a human clicks to open the opportunity in Sturgeon (used in CTAs).
 STURGEON_APP_URL: str = os.getenv("STURGEON_APP_URL", "https://sturgeon.ai")
 
+# ── Scheduler (Phase 2 — disabled by default in production) ───────────────────
+# The workflow scheduler stays OFF unless explicitly enabled. When false,
+# scheduled workflows (daily brief, weekly tracker) never auto-run.
+ECHO_SCHEDULER_ENABLED: bool = os.getenv("ECHO_SCHEDULER_ENABLED", "false").lower() == "true"
+
+# ── GA4 conversion tracking (Phase 2 — Measurement Protocol, optional) ────────
+# Outbound conversion events (CTA clicks, Sturgeon handoffs). Distinct from the
+# read-only GA4_ACCESS_TOKEN attribution above. No-op when either is unset.
+GA4_MEASUREMENT_ID: str = os.getenv("GA4_MEASUREMENT_ID", "")
+GA4_API_SECRET: str = os.getenv("GA4_API_SECRET", "")
+
+# ── Disaster procurement adapters (Phase 2 — NRS / SEMA, optional) ────────────
+# Live adapters are used only when a base URL is set; otherwise the provider is
+# disabled and returns no signals. Set *_USE_MOCK=true to emit clearly-labelled
+# mock signals for local/demo use (never in production).
+NRS_API_URL: str = os.getenv("NRS_API_URL", "")
+NRS_API_KEY: str = os.getenv("NRS_API_KEY", "")
+NRS_USE_MOCK: bool = os.getenv("NRS_USE_MOCK", "false").lower() == "true"
+SEMA_API_URL: str = os.getenv("SEMA_API_URL", "")
+SEMA_API_KEY: str = os.getenv("SEMA_API_KEY", "")
+SEMA_USE_MOCK: bool = os.getenv("SEMA_USE_MOCK", "false").lower() == "true"
+
 # ── Worker ────────────────────────────────────────────────────────────────────
 # How often (seconds) the background worker ticks the scheduler
 WORKER_TICK_INTERVAL: int = int(os.getenv("WORKER_TICK_INTERVAL", "60"))

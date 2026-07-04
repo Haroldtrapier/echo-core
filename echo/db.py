@@ -413,6 +413,37 @@ class EchoSturgeonHandoff(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+# ─── Echo Schedules (Phase 2 scheduler) ───────────────────────────────────────
+
+
+class EchoSchedule(Base):
+    """A recurring workflow schedule. Interval-based; disabled by default.
+
+    The scheduler only acts on these when ``ECHO_SCHEDULER_ENABLED`` is true AND
+    the individual row's ``enabled`` flag is true — two independent off-switches.
+    """
+
+    __tablename__ = "echo_schedules"
+    __table_args__ = (
+        Index("ix_echo_schedules_slug", "workflow_slug"),
+        Index("ix_echo_schedules_enabled", "enabled"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    workflow_slug: Mapped[str] = mapped_column(String(128), nullable=False)
+    interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=1440)
+    payload: Mapped[Any] = mapped_column(JSON, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, default="imani-internal")
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_run_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    run_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 # ── Session helpers ───────────────────────────────────────────────────────────
 
 # Tracks whether create_tables() has succeeded at least once.

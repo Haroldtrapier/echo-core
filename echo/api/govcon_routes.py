@@ -32,7 +32,10 @@ from echo.config import DEFAULT_TENANT_ID
 from echo.core.registry import all_metadata
 from echo.db import Approval, EchoSturgeonHandoff, get_db
 from echo.modules import approval as approval_mod
+from echo.modules import connectors as connectors_mod
+from echo.modules import conversion as conversion_mod
 from echo.modules import events as events_mod
+from echo.modules import publishing as publishing_mod
 from echo.modules import sturgeon as sturgeon_mod
 
 router = APIRouter()
@@ -177,6 +180,9 @@ def create_handoff(body: HandoffRequest, db: Session = Depends(get_db)) -> dict[
         workflow_run_id=body.workflow_run_id,
         created_by=body.created_by or "govcon_command_center",
     )
+    # Record a Sturgeon-handoff *conversion* (analytics + GA4 no-op) alongside the
+    # handoff's own creation event — this is the conversion-tracking signal.
+    conversion_mod.track_sturgeon_handoff(db, h, tenant_id=body.tenant_id or DEFAULT_TENANT_ID)
     return sturgeon_mod.handoff_dict(h)
 
 
@@ -245,3 +251,87 @@ def workflow_registry(
     if product_area:
         rows = [r for r in rows if r["product_area"] == product_area]
     return {"workflows": rows, "count": len(rows)}
+
+
+# ─── Scheduler (Phase 2 — OFF by default) ─────────────────────────────────────
+
+
+@router.get("/scheduler", dependencies=[Depends(require_api_key)])
+def scheduler_status(db: Session = Depends(get_db)) -> dict[str, Any]:
+    from echo import scheduling
+
+    scheduling.sync_default_schedules(db)  # ensure defaults exist (disabled)
+    return scheduling.scheduler_status(db)
+
+
+@router.post("/scheduler/tick", dependencies=[Depends(require_api_key)])
+def scheduler_tick(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Fire due schedules now — no-op unless ECHO_SCHEDULER_ENABLED=true."""
+    from echo import scheduling
+
+    return scheduling.run_due(db)
+
+
+# ─── Approval-first publishing (Phase 2 — dry-run by default) ─────────────────
+
+
+class PublishRequest(BaseModel):
+    connector: str = "noop"
+    actor: str = "operator"
+    dry_run: bool | None = None
+    tenant_id: str | None = None
+
+
+@router.get("/connectors", dependencies=[Depends(require_api_key)])
+def list_connectors() -> dict[str, Any]:
+    return {"connectors": connectors_mod.available_connectors()}
+
+
+@router.post("/approvals/{approval_id}/publish", dependencies=[Depends(require_api_key)])
+def publish_draft(
+    approval_id: str, body: PublishRequest, db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    """Publish an approved draft through a connector (dry-run unless live gate on)."""
+    try:
+        return publishing_mod.publish_approved(
+            db, approval_id, connector=body.connector, actor=body.actor,
+            dry_run=body.dry_run, tenant_id=body.tenant_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+# ─── Conversion tracking (Phase 2) ────────────────────────────────────────────
+
+
+class CtaClickRequest(BaseModel):
+    campaign: str
+    url: str | None = None
+    client_id: str | None = None
+    source: str | None = None
+    medium: str | None = None
+    content: str | None = None
+    tenant_id: str | None = None
+
+
+@router.post("/track/cta-click", dependencies=[Depends(require_api_key)])
+def track_cta_click(body: CtaClickRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return conversion_mod.track_cta_click(
+        db, campaign=body.campaign, url=body.url, client_id=body.client_id,
+        source=body.source, medium=body.medium, content=body.content,
+        tenant_id=body.tenant_id or DEFAULT_TENANT_ID,
+    )
+
+
+# ─── Disaster provider status (Phase 2 — NRS/SEMA) ────────────────────────────
+
+
+@router.get("/disaster/status", dependencies=[Depends(require_api_key)])
+def disaster_status() -> dict[str, Any]:
+    from echo.integrations import disaster
+
+    return {"providers": disaster.provider_status()}
