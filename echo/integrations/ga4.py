@@ -7,12 +7,14 @@ clicks?".
 
 Credentials (all optional — absent ⇒ graceful empty results):
   * ``GA4_PROPERTY_ID``  — numeric GA4 property id.
-  * ``GA4_ACCESS_TOKEN`` — an OAuth2 bearer token for the Analytics Data API.
-    (In production this is minted/refreshed from a service account by an
-    external token provider; Echo just consumes it. Read-only.)
+  * A token source (either one):
+      - ``GA4_SERVICE_ACCOUNT_JSON`` / ``GA4_SERVICE_ACCOUNT_FILE`` — Echo mints
+        and refreshes its own read-only token (see ``ga4_auth``); or
+      - ``GA4_ACCESS_TOKEN`` — a pre-minted token from an external provider.
 
-Without both, ``get_campaign_metrics`` returns ``{}`` and the caller degrades
-to DB-only counts — never a crash, never fabricated numbers.
+Without a property id and a usable token, ``get_campaign_metrics`` returns ``{}``
+and the caller degrades to DB-only counts — never a crash, never fabricated
+numbers.
 """
 from __future__ import annotations
 
@@ -21,8 +23,9 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from echo.config import GA4_ACCESS_TOKEN, GA4_PROPERTY_ID
+from echo.config import GA4_PROPERTY_ID
 from echo.core.logger import get_logger
+from echo.integrations.ga4_auth import get_access_token
 
 log = get_logger("echo.integrations.ga4")
 
@@ -30,17 +33,20 @@ _DATA_API = "https://analyticsdata.googleapis.com/v1beta"
 
 
 def is_configured() -> bool:
-    return bool(GA4_PROPERTY_ID and GA4_ACCESS_TOKEN)
+    return bool(GA4_PROPERTY_ID and get_access_token())
 
 
 def _run_report(body: dict[str, Any]) -> dict[str, Any]:
+    token = get_access_token()
+    if not token:
+        raise RuntimeError("GA4 access token unavailable")
     url = f"{_DATA_API}/properties/{GA4_PROPERTY_ID}:runReport"
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=data,
         headers={
-            "Authorization": f"Bearer {GA4_ACCESS_TOKEN}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         },
         method="POST",

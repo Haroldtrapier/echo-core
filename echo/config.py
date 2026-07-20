@@ -45,7 +45,15 @@ RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
 EMAIL_FROM: str = os.getenv("EMAIL_FROM", "")
 # GA4 (Google Analytics 4) — read-only campaign attribution for the Weekly Report.
 GA4_PROPERTY_ID: str = os.getenv("GA4_PROPERTY_ID", "")
+# A pre-minted OAuth2 bearer token (legacy / external provider). Optional if a
+# service account is configured below — Echo then mints + refreshes its own token.
 GA4_ACCESS_TOKEN: str = os.getenv("GA4_ACCESS_TOKEN", "")
+# Service-account credentials for self-minting GA4 tokens (no external refresher
+# needed). Provide the JSON key inline via GA4_SERVICE_ACCOUNT_JSON *or* a path
+# via GA4_SERVICE_ACCOUNT_FILE. Grant the service account "Viewer" on the GA4
+# property. Requires the `cryptography` package (in requirements.txt).
+GA4_SERVICE_ACCOUNT_JSON: str = os.getenv("GA4_SERVICE_ACCOUNT_JSON", "")
+GA4_SERVICE_ACCOUNT_FILE: str = os.getenv("GA4_SERVICE_ACCOUNT_FILE", "")
 
 # Disaster feeds beyond FEMA (provisioned adapters — safe no-op when unset).
 # NRS: National Response System feed. SEMA: State Emergency Management Agency

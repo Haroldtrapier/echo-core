@@ -63,8 +63,13 @@ Status of the Echo Core + Echo GovCon production MVP.
       default). Code-complete; live send now needs only real connector creds
       (`LINKEDIN_*`, `RESEND_API_KEY` + `EMAIL_FROM`) and the gate flip.
       Covered by `tests/test_dispatch.py`.
-- [ ] **CTA click attribution** — depends on GA4 being configured
-      (`GA4_PROPERTY_ID` / `GA4_ACCESS_TOKEN`); the weekly tracker notes this.
+- [x] **CTA click attribution (token minting)** — `echo/integrations/ga4_auth.py`
+      mints + caches a read-only GA4 Data API token from a Google service account
+      (`GA4_SERVICE_ACCOUNT_JSON` / `_FILE`), removing the "run your own token
+      refresher" burden; `ga4.py` consumes it, falling back to a static
+      `GA4_ACCESS_TOKEN`. RS256 signing verified against the public key in
+      `tests/test_ga4_auth.py`. Live attribution now needs only a GA4 property +
+      a service account with Viewer access.
 - [x] **Multi-tenant RLS** — migration `0006_multitenant_rls.sql` installs
       idempotent `echo_enable_rls()` / `echo_disable_rls()` functions (catalog-
       driven over every `tenant_id` table). Applying the migration is a no-op;

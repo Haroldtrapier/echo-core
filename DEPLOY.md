@@ -131,11 +131,14 @@ Add any subset; absent keys leave that integration safely disabled.
 | TikTok video (auto) | `VIDEO_API_KEY`, `VIDEO_API_URL` | your render service (contract below) |
 | Image hosting | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `MEDIA_BUCKET` | Supabase → Storage |
 
-**GA4 token note.** The Data API needs an OAuth2 bearer token. Create a Google
-**service account**, grant it **Viewer** on the GA4 property, and run a small
-refresher (Cloud Function / cron) that mints an access token and writes it to
-`GA4_ACCESS_TOKEN`. Until then GA4 reports `ga4_configured: false` and the
-Weekly Report falls back to DB inventory.
+**GA4 token note.** The Data API needs an OAuth2 bearer token. Easiest path:
+create a Google **service account**, grant it **Viewer** on the GA4 property,
+and give Echo the key via `GA4_SERVICE_ACCOUNT_JSON` (inline JSON) or
+`GA4_SERVICE_ACCOUNT_FILE` (path) — Echo mints and refreshes the read-only token
+itself (`echo/integrations/ga4_auth.py`), no external refresher needed.
+Alternatively, supply a pre-minted token via `GA4_ACCESS_TOKEN`. Until a property
+id + a token source are set, GA4 reports `ga4_configured: false` and the Weekly
+Report falls back to DB inventory.
 
 ### Instagram image hosting
 
