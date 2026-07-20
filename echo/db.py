@@ -15,10 +15,11 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
-from echo.config import DATABASE_URL
+from echo.config import DATABASE_URL, DEFAULT_TENANT_ID, ECHO_RLS_ENABLED
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,36 @@ engine = create_engine(
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+#: True only on a real Postgres backend — the RLS GUC is a no-op elsewhere.
+_IS_POSTGRES = engine.dialect.name == "postgresql"
+
+
+def apply_session_tenant(db: Session, tenant_id: str | None = None) -> None:
+    """Scope this DB session to a tenant for Row-Level Security.
+
+    Sets the ``app.current_tenant`` GUC that migration 0006's policies read.
+    A no-op unless ``ECHO_RLS_ENABLED`` is set and the backend is Postgres, so
+    dev/test (SQLite) and single-tenant owner deployments are unaffected. Session
+    scope (not transaction-local) so it survives the runner's mid-run commits;
+    the session factories reset it on close to keep pooled connections clean.
+    """
+    if not ECHO_RLS_ENABLED or not _IS_POSTGRES:
+        return
+    db.execute(
+        text("SELECT set_config('app.current_tenant', :t, false)"),
+        {"t": tenant_id or DEFAULT_TENANT_ID},
+    )
+
+
+def _clear_session_tenant(db: Session) -> None:
+    """Reset the tenant GUC so a pooled connection carries no tenant into reuse."""
+    if not ECHO_RLS_ENABLED or not _IS_POSTGRES:
+        return
+    try:
+        db.execute(text("SELECT set_config('app.current_tenant', '', false)"))
+    except Exception:  # noqa: BLE001 — never let cleanup mask the real result
+        pass
 
 
 # ── Base ──────────────────────────────────────────────────────────────────────
@@ -436,9 +467,11 @@ def get_db() -> Generator[Session, None, None]:
     """
     ensure_tables()
     db = SessionLocal()
+    apply_session_tenant(db)
     try:
         yield db
     finally:
+        _clear_session_tenant(db)
         db.close()
 
 
@@ -446,9 +479,11 @@ def get_db() -> Generator[Session, None, None]:
 def db_session() -> Generator[Session, None, None]:
     """Context manager for non-FastAPI code (worker, scripts)."""
     db = SessionLocal()
+    apply_session_tenant(db)
     try:
         yield db
     finally:
+        _clear_session_tenant(db)
         db.close()
 
 

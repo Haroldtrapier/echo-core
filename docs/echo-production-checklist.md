@@ -60,10 +60,16 @@ Status of the Echo Core + Echo GovCon production MVP.
       credentials, not missing code.)
 - [ ] **CTA click attribution** — depends on GA4 being configured
       (`GA4_PROPERTY_ID` / `GA4_ACCESS_TOKEN`); the weekly tracker notes this.
-- [ ] **Multi-tenant RLS** — Echo is single-tenant-by-default (`DEFAULT_TENANT_ID`);
-      tenant columns exist and migration `0005` ships a reviewed, **opt-in** RLS
-      policy scaffold (commented), left disabled to match the app's privileged
-      connection model until multi-tenancy is turned on.
+- [x] **Multi-tenant RLS** — migration `0006_multitenant_rls.sql` installs
+      idempotent `echo_enable_rls()` / `echo_disable_rls()` functions (catalog-
+      driven over every `tenant_id` table). Applying the migration is a no-op;
+      enable with `SELECT echo_enable_rls();` (reversible). The app scopes each
+      session to its tenant via `app.current_tenant` when `ECHO_RLS_ENABLED=true`
+      (no-op on SQLite / for the owner role). Proven on Postgres 16: a non-owner
+      role sees only its tenant's rows (+ shared `NULL`-tenant rows), the owner
+      bypasses (never locked out), cross-tenant writes are blocked, and
+      enable/disable are idempotent. Left `ECHO_RLS_ENABLED=false` by default so
+      single-tenant deployments are unaffected until isolation is turned on.
 - [ ] **Live end-to-end validation** — exercise the real SAM.gov / LinkedIn /
       Buffer / FEMA calls once credentials are provisioned (all paths degrade
       safely without them today).
@@ -96,6 +102,7 @@ supabase/migrations/0002_cockpit_read_models.sql
 supabase/migrations/0003_echo_jobs.sql
 supabase/migrations/0004_echo_govcon.sql
 supabase/migrations/0005_id_type_reconciliation.sql   ← id UUID→TEXT reconciliation
+supabase/migrations/0006_multitenant_rls.sql          ← opt-in tenant RLS (echo_enable_rls())
 ```
 
 `0004` adds `echo_workflows`, `echo_analytics_events`, `echo_sturgeon_handoffs`,
@@ -105,7 +112,7 @@ self-provisioning; the SQL migrations are for Supabase-managed environments.
 
 ## Deployment steps
 
-1. Provision Postgres (Railway plugin or Supabase). Apply migrations `0001`–`0005`.
+1. Provision Postgres (Railway plugin or Supabase). Apply migrations `0001`–`0006`.
 2. Set env vars (at minimum `ECHO_API_KEY`; `DATABASE_URL` is auto-injected on Railway).
 3. Deploy the web service: `uvicorn echo.main:app --host 0.0.0.0 --port $PORT`
    (see `railway.json` / `DEPLOY.md`).

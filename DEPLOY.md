@@ -31,6 +31,7 @@ idempotent and safe to re-run):
 3. `supabase/migrations/0003_echo_jobs.sql` — `echo_jobs`, `echo_job_schedules`, `echo_execution_audits`
 4. `supabase/migrations/0004_echo_govcon.sql` — `echo_workflows`, `echo_analytics_events`, `echo_sturgeon_handoffs`, compatibility views
 5. `supabase/migrations/0005_id_type_reconciliation.sql` — align id columns (`UUID`→`TEXT`) with the ORM
+6. `supabase/migrations/0006_multitenant_rls.sql` — install opt-in tenant RLS switch (no-op until `SELECT echo_enable_rls();`)
 
 > The app also calls `create_tables()` on startup, so tables self-heal — but
 > running the migrations first gives you the exact, reviewed schema.

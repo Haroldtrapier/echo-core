@@ -75,6 +75,13 @@ MEDIA_BUCKET: str = os.getenv("MEDIA_BUCKET", "echo-media")
 # Default workspace/tenant used when a caller does not supply one. Echo is
 # single-tenant-by-default; multi-tenant callers pass tenant_id explicitly.
 DEFAULT_TENANT_ID: str = os.getenv("DEFAULT_TENANT_ID", "imani-internal")
+# When true, each DB session sets the `app.current_tenant` GUC so the opt-in
+# Row-Level Security policies (migration 0006 → SELECT echo_enable_rls()) scope
+# reads/writes to the caller's tenant. Off by default: the standard deployment
+# connects as the table owner and bypasses RLS, so single-tenant setups are
+# unaffected. Turn this on together with echo_enable_rls() for tenant isolation
+# on non-owner/least-privilege DB roles. No-op on SQLite (dev/test).
+ECHO_RLS_ENABLED: bool = os.getenv("ECHO_RLS_ENABLED", "false").lower() == "true"
 
 # ── Sturgeon handoff ──────────────────────────────────────────────────────────
 # When STURGEON_API_URL is set, Echo GovCon forwards handoffs to Sturgeon's

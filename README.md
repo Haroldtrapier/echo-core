@@ -37,6 +37,9 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` + `MEDIA_BUCKET` | Host generated images at a public URL (for base64 image responses) |
 | `ECHO_ALLOW_LIVE_PUBLISH` | Set to `true` to enable live publishing (default: dry-run only) |
 | `ECHO_ENABLED` | Set to `false` to disable workflow scheduling (default: `true`) |
+| `ECHO_SCHEDULE_<SLUG>` | Override a scheduled workflow's cadence in seconds (`0` disables) |
+| `ECHO_RLS_ENABLED` | Scope DB sessions to their tenant for opt-in RLS (default: `false`; pair with `SELECT echo_enable_rls();`) |
+| `NRS_API_URL` / `SEMA_API_URL` | Extra disaster feeds folded into FEMA (safe no-op when unset) |
 | `WORKER_TICK_INTERVAL` | Worker scheduler interval in seconds (default: `60`) |
 | `CORS_ORIGINS` | Comma-separated allowed origins (default: `*`) |
 
@@ -130,6 +133,7 @@ Run in Supabase SQL Editor (or via `supabase db push`):
 3. `supabase/migrations/0003_echo_jobs.sql` — echo_jobs, echo_job_schedules, echo_execution_audits
 4. `supabase/migrations/0004_echo_govcon.sql` — echo_workflows, echo_analytics_events, echo_sturgeon_handoffs, compatibility views
 5. `supabase/migrations/0005_id_type_reconciliation.sql` — align id columns (UUID→TEXT) with the ORM
+6. `supabase/migrations/0006_multitenant_rls.sql` — opt-in multi-tenant RLS (`SELECT echo_enable_rls();`)
 
 All migrations are idempotent and safe to re-run.
 
