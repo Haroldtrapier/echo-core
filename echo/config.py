@@ -43,6 +43,16 @@ SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
 GA4_PROPERTY_ID: str = os.getenv("GA4_PROPERTY_ID", "")
 GA4_ACCESS_TOKEN: str = os.getenv("GA4_ACCESS_TOKEN", "")
 
+# Disaster feeds beyond FEMA (provisioned adapters — safe no-op when unset).
+# NRS: National Response System feed. SEMA: State Emergency Management Agency
+# feed; SEMA_API_URL may contain a "{state}" placeholder (e.g.
+# https://alerts.example.gov/{state}/declarations.json). Both normalize to the
+# FEMA declaration shape and fold into pack.safe_disaster_declarations().
+NRS_API_URL: str = os.getenv("NRS_API_URL", "")
+NRS_API_KEY: str = os.getenv("NRS_API_KEY", "")
+SEMA_API_URL: str = os.getenv("SEMA_API_URL", "")
+SEMA_API_KEY: str = os.getenv("SEMA_API_KEY", "")
+
 # Image generation (Instagram creative). OpenAI-compatible images API.
 IMAGE_API_KEY: str = os.getenv("IMAGE_API_KEY", "")
 IMAGE_API_BASE: str = os.getenv("IMAGE_API_BASE", "https://api.openai.com/v1")
@@ -75,9 +85,13 @@ STURGEON_API_KEY: str = os.getenv("STURGEON_API_KEY", "")
 # Public URL a human clicks to open the opportunity in Sturgeon (used in CTAs).
 STURGEON_APP_URL: str = os.getenv("STURGEON_APP_URL", "https://sturgeon.ai")
 
-# ── Worker ────────────────────────────────────────────────────────────────────
+# ── Worker / scheduling ───────────────────────────────────────────────────────
 # How often (seconds) the background worker ticks the scheduler
 WORKER_TICK_INTERVAL: int = int(os.getenv("WORKER_TICK_INTERVAL", "60"))
+# Per-workflow cadence override: set ECHO_SCHEDULE_<SLUG> (uppercased slug) to a
+# number of seconds to change how often a scheduled workflow auto-runs, or to 0
+# to disable it. Defaults come from each workflow's schedule_interval_seconds.
+# Read dynamically in echo.core.scheduler.resolve_schedule_seconds.
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 _raw_cors = os.getenv("CORS_ORIGINS", "*")

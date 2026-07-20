@@ -157,3 +157,56 @@ def safe_fema_declarations(
     except Exception as exc:  # noqa: BLE001
         log.info("FEMA unavailable (%s) — brief continues without disaster signals", exc)
         return []
+
+
+#: Disaster sources folded into ``safe_disaster_declarations``. Each is an
+#: ``echo.integrations`` module exposing ``get_disaster_declarations(...)`` with
+#: the FEMA field shape. FEMA is always live; NRS/SEMA are provisioned adapters
+#: that no-op (return ``[]``) until their ``*_API_URL`` env vars are set.
+DISASTER_SOURCES: tuple[str, ...] = ("fema", "nrs", "sema")
+
+
+def _declaration_key(rec: dict[str, Any]) -> tuple:
+    """Dedup key across sources — same state + incident + number/title collide."""
+    return (
+        str(rec.get("state") or "").upper(),
+        str(rec.get("incidentType") or "").lower(),
+        str(rec.get("declarationNumber") or rec.get("declarationTitle") or "").lower(),
+    )
+
+
+def safe_disaster_declarations(
+    *,
+    state: str | None = None,
+    limit: int = 5,
+    days_back: int = 14,
+    sources: tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
+    """Aggregate disaster declarations across FEMA + NRS + SEMA, safely.
+
+    Each source is queried independently; a source that errors or is
+    unconfigured contributes nothing (never raises). Results are tagged with a
+    ``source`` field, de-duplicated across feeds, and truncated to ``limit``.
+    Back-compat: ``safe_fema_declarations`` remains FEMA-only.
+    """
+    from importlib import import_module
+
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple] = set()
+    for name in sources or DISASTER_SOURCES:
+        try:
+            mod = import_module(f"echo.integrations.{name}")
+            records = mod.get_disaster_declarations(
+                state=state, limit=limit, days_back=days_back
+            ) or []
+        except Exception as exc:  # noqa: BLE001
+            log.info("%s disaster feed unavailable (%s) — skipping", name.upper(), exc)
+            continue
+        for rec in records:
+            rec.setdefault("source", name)
+            key = _declaration_key(rec)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(rec)
+    return merged[:limit]

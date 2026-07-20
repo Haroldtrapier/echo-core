@@ -127,8 +127,11 @@ pytest -q
 Run in Supabase SQL Editor (or via `supabase db push`):
 1. `supabase/migrations/0001_echo_core_schema.sql` — workflow_runs, approvals
 2. `supabase/migrations/0002_cockpit_read_models.sql` — content_items, publishing_jobs, automation_logs, integration_health
+3. `supabase/migrations/0003_echo_jobs.sql` — echo_jobs, echo_job_schedules, echo_execution_audits
+4. `supabase/migrations/0004_echo_govcon.sql` — echo_workflows, echo_analytics_events, echo_sturgeon_handoffs, compatibility views
+5. `supabase/migrations/0005_id_type_reconciliation.sql` — align id columns (UUID→TEXT) with the ORM
 
-Both migrations are idempotent and safe to re-run.
+All migrations are idempotent and safe to re-run.
 
 ## Security
 

@@ -26,27 +26,47 @@ Status of the Echo Core + Echo GovCon production MVP.
 - [x] **Migration** — `supabase/migrations/0004_echo_govcon.sql`.
 - [x] **`.env.example`** — all vars with safe fallbacks.
 
+## Recently closed (completion pass)
+
+- [x] **Scheduled cadence wiring** — scheduled workflows now auto-run on the
+      worker tick when their cadence is due. Each carries a
+      `schedule_interval_seconds` (daily brief = 86 400s, FEMA watch = 3 600s,
+      weekly tracker = 604 800s), overridable per deploy with
+      `ECHO_SCHEDULE_<SLUG>` (seconds; `0` disables). Surfaced in the registry
+      metadata. Fixed a latent worker crash (`scheduler.tick` now accepts the
+      worker's session and the tick report's failed-count is used correctly).
+      Covered by `tests/test_scheduler_and_disaster.py`.
+- [x] **Live NRS/SEMA disaster adapters** — `echo/integrations/nrs.py` and
+      `echo/integrations/sema.py` implement the FEMA `get_disaster_declarations`
+      shape, normalize records into the FEMA field layout, and activate when
+      `NRS_API_URL` / `SEMA_API_URL` (+ optional `*_API_KEY`) are set — otherwise
+      they contribute nothing. `pack.safe_disaster_declarations` fans out across
+      FEMA + NRS + SEMA, de-duplicates, and is consumed by the daily brief and
+      procurement watch.
+- [x] **Id-type drift reconciliation** — `supabase/migrations/0005_id_type_reconciliation.sql`
+      converts every `UUID` id column across the schema to `TEXT` to match the
+      ORM's 32-char hex ids. Generic (catalog-driven, covers future id columns),
+      idempotent, non-lossy, and FK-safe (captures/recreates every foreign key
+      verbatim, preserving `ON DELETE` semantics). Verified end-to-end on
+      Postgres 16: 0 uuid columns remain, all FKs preserved, cascade intact,
+      re-runnable. This supersedes the earlier "workflow_runs.id / approvals.id"
+      note — the drift was schema-wide.
+
 ## Remaining gaps (to reach truly 100%)
 
 - [ ] **Live connector send** on `mark-ready` (LinkedIn/email) — currently
       publishing still runs through `approved_publisher` in dry-run until
-      `ECHO_ALLOW_LIVE_PUBLISH=true` and real connector creds exist.
-- [ ] **Live NRS/SEMA disaster adapters** — FEMA is live; NRS/SEMA use the safe
-      mockable interface (`pack.safe_fema_declarations`) with TODO markers.
+      `ECHO_ALLOW_LIVE_PUBLISH=true` and real connector creds exist. (Config +
+      credentials, not missing code.)
 - [ ] **CTA click attribution** — depends on GA4 being configured
       (`GA4_PROPERTY_ID` / `GA4_ACCESS_TOKEN`); the weekly tracker notes this.
-- [ ] **Scheduled cadence wiring** — scheduled workflows run on the worker tick;
-      define the concrete cron/interval per workflow in the deploy env.
 - [ ] **Multi-tenant RLS** — Echo is single-tenant-by-default (`DEFAULT_TENANT_ID`);
-      tenant columns exist but Supabase RLS policies are not enabled (the existing
-      migrations use no RLS — matching project convention).
-- [ ] **Pre-existing id-type drift (follow-up, not introduced here)** — in the
-      hand-written SQL migrations `workflow_runs.id` / `approvals.id` are `UUID`,
-      while the runtime ORM uses `VARCHAR(32)` hex ids. The app provisions its
-      schema via `create_all()` (ORM types), so this only affects environments
-      that apply the SQL migrations standalone. Reconciling it is a destructive
-      PK-type change on shipped tables and should be a dedicated migration, not
-      bundled here.
+      tenant columns exist and migration `0005` ships a reviewed, **opt-in** RLS
+      policy scaffold (commented), left disabled to match the app's privileged
+      connection model until multi-tenancy is turned on.
+- [ ] **Live end-to-end validation** — exercise the real SAM.gov / LinkedIn /
+      Buffer / FEMA calls once credentials are provisioned (all paths degrade
+      safely without them today).
 
 ## Table names
 
@@ -74,7 +94,8 @@ Run in order against Supabase/Postgres (idempotent):
 supabase/migrations/0001_echo_core_schema.sql
 supabase/migrations/0002_cockpit_read_models.sql
 supabase/migrations/0003_echo_jobs.sql
-supabase/migrations/0004_echo_govcon.sql   ← new (this MVP)
+supabase/migrations/0004_echo_govcon.sql
+supabase/migrations/0005_id_type_reconciliation.sql   ← id UUID→TEXT reconciliation
 ```
 
 `0004` adds `echo_workflows`, `echo_analytics_events`, `echo_sturgeon_handoffs`,
@@ -84,7 +105,7 @@ self-provisioning; the SQL migrations are for Supabase-managed environments.
 
 ## Deployment steps
 
-1. Provision Postgres (Railway plugin or Supabase). Apply migrations `0001`–`0004`.
+1. Provision Postgres (Railway plugin or Supabase). Apply migrations `0001`–`0005`.
 2. Set env vars (at minimum `ECHO_API_KEY`; `DATABASE_URL` is auto-injected on Railway).
 3. Deploy the web service: `uvicorn echo.main:app --host 0.0.0.0 --port $PORT`
    (see `railway.json` / `DEPLOY.md`).

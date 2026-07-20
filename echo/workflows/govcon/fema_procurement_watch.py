@@ -5,11 +5,12 @@ fallback when unavailable) and produces a procurement alert, a contractor action
 brief, a readiness/supply opportunity angle, and a Sturgeon handoff CTA — queued
 as a reviewable alert draft. Optionally opens a Sturgeon handoff when asked.
 
-The provider interface is mockable: ``pack.safe_fema_declarations`` wraps the
-live adapter and returns ``[]`` on any error, so this runs offline. To wire a
-different disaster source (NRS / SEMA), implement an adapter with the same
-``get_disaster_declarations(...)`` shape and point the wrapper at it. TODO: add
-NRS/SEMA live adapters when those feeds are provisioned.
+The provider interface is mockable: ``pack.safe_disaster_declarations`` fans out
+across FEMA + NRS + SEMA and returns ``[]`` on any error, so this runs offline.
+FEMA is always live; the NRS (``echo.integrations.nrs``) and SEMA
+(``echo.integrations.sema``) adapters follow the same
+``get_disaster_declarations(...)`` shape and activate when their ``*_API_URL``
+env vars are provisioned — otherwise they safely contribute nothing.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ class FemaProcurementWatchWorkflow(pack.GovConWorkflow):
         "contractor action brief, readiness/supply angle, and Sturgeon handoff CTA."
     )
     trigger_type = "scheduled"
+    schedule_interval_seconds = 3_600  # hourly disaster watch
     output_type = "alert"
     connector_targets = ("fema", "slack")
     input_schema = {
@@ -41,7 +43,7 @@ class FemaProcurementWatchWorkflow(pack.GovConWorkflow):
     def run(self, db: Any, payload: dict[str, Any]) -> WorkflowResult:
         state = payload.get("state")
         days_back = int(payload.get("days_back", 14))
-        declarations = pack.safe_fema_declarations(
+        declarations = pack.safe_disaster_declarations(
             state=state, limit=payload.get("limit", 10), days_back=days_back
         )
 

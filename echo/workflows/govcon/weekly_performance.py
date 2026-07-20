@@ -26,6 +26,7 @@ class WeeklyPerformanceTrackerWorkflow(pack.GovConWorkflow):
         "rejections, published items, Sturgeon handoffs) with recommendations."
     )
     trigger_type = "scheduled"
+    schedule_interval_seconds = 604_800  # weekly
     output_type = "report"
     # Every run queues a draft Approval via pack.queue_draft (the report is
     # reviewed before it's shared), so the registry policy must reflect that.

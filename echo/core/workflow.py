@@ -41,6 +41,11 @@ class BaseWorkflow(ABC):
     product_area: str = "echo_core"
     #: How this workflow is normally triggered: manual | scheduled | webhook | event
     trigger_type: str = "manual"
+    #: For ``scheduled`` workflows: how often (seconds) the worker should auto-run
+    #: this workflow. ``None`` means "no built-in cadence" (run only when
+    #: explicitly triggered). Operators can override per workflow at deploy time
+    #: with ``ECHO_SCHEDULE_<SLUG>`` (seconds; ``0`` disables). See core.scheduler.
+    schedule_interval_seconds: int | None = None
     #: Advisory description of the expected ``payload`` fields (read-only default).
     input_schema: dict[str, Any] = {}
     #: What the workflow produces: draft | brief | report | alert | handoff | media | none

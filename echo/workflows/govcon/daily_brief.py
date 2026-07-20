@@ -37,6 +37,7 @@ class DailyGovConBriefWorkflow(pack.GovConWorkflow):
         "Sturgeon CTA) and queues it as a reviewable draft."
     )
     trigger_type = "scheduled"
+    schedule_interval_seconds = 86_400  # daily
     output_type = "brief"
     connector_targets = ("sam_gov", "usaspending", "fema", "slack")
     input_schema = {
@@ -53,7 +54,7 @@ class DailyGovConBriefWorkflow(pack.GovConWorkflow):
 
         opportunities = pack.safe_sam_opportunities(keywords, limit=payload.get("sam_limit", 5))
         awards = pack.safe_recent_awards(keywords, limit=payload.get("awards_limit", 5))
-        declarations = pack.safe_fema_declarations(state=state, limit=3)
+        declarations = pack.safe_disaster_declarations(state=state, limit=3)
 
         tip_index = datetime.now(timezone.utc).timetuple().tm_yday % len(CERT_TIPS)
         cert_tip = CERT_TIPS[tip_index]
