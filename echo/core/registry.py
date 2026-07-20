@@ -41,6 +41,7 @@ def workflow_metadata(cls: Type[BaseWorkflow]) -> dict:
         "product_area": getattr(cls, "product_area", "echo_core"),
         "description": cls.description,
         "trigger_type": getattr(cls, "trigger_type", "manual"),
+        "schedule_interval_seconds": getattr(cls, "schedule_interval_seconds", None),
         "input_schema": dict(getattr(cls, "input_schema", {}) or {}),
         "output_type": getattr(cls, "output_type", "none"),
         "approval_required": bool(getattr(cls, "approval_required", False)),

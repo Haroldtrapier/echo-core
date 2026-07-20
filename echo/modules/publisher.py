@@ -83,6 +83,12 @@ def _live_publish(platform: str, content: dict[str, Any]) -> PublishResult:
             url = buf_post(content)
             return PublishResult(platform=platform, dry_run=False, success=True, live_url=url)
 
+        if platform == "email":
+            from echo.integrations.email_resend import send as email_send
+            message_id = email_send(content)
+            return PublishResult(platform=platform, dry_run=False, success=True,
+                                 live_url=message_id)
+
         return PublishResult(
             platform=platform, dry_run=False, success=False,
             error="Live publish not implemented for this platform yet"

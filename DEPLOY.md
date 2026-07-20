@@ -29,6 +29,9 @@ idempotent and safe to re-run):
 1. `supabase/migrations/0001_echo_core_schema.sql` — `workflow_runs`, `approvals`
 2. `supabase/migrations/0002_cockpit_read_models.sql` — `content_items`, `publishing_jobs`, `automation_logs`, `integration_health`
 3. `supabase/migrations/0003_echo_jobs.sql` — `echo_jobs`, `echo_job_schedules`, `echo_execution_audits`
+4. `supabase/migrations/0004_echo_govcon.sql` — `echo_workflows`, `echo_analytics_events`, `echo_sturgeon_handoffs`, compatibility views
+5. `supabase/migrations/0005_id_type_reconciliation.sql` — align id columns (`UUID`→`TEXT`) with the ORM
+6. `supabase/migrations/0006_multitenant_rls.sql` — install opt-in tenant RLS switch (no-op until `SELECT echo_enable_rls();`)
 
 > The app also calls `create_tables()` on startup, so tables self-heal — but
 > running the migrations first gives you the exact, reviewed schema.
@@ -128,11 +131,14 @@ Add any subset; absent keys leave that integration safely disabled.
 | TikTok video (auto) | `VIDEO_API_KEY`, `VIDEO_API_URL` | your render service (contract below) |
 | Image hosting | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `MEDIA_BUCKET` | Supabase → Storage |
 
-**GA4 token note.** The Data API needs an OAuth2 bearer token. Create a Google
-**service account**, grant it **Viewer** on the GA4 property, and run a small
-refresher (Cloud Function / cron) that mints an access token and writes it to
-`GA4_ACCESS_TOKEN`. Until then GA4 reports `ga4_configured: false` and the
-Weekly Report falls back to DB inventory.
+**GA4 token note.** The Data API needs an OAuth2 bearer token. Easiest path:
+create a Google **service account**, grant it **Viewer** on the GA4 property,
+and give Echo the key via `GA4_SERVICE_ACCOUNT_JSON` (inline JSON) or
+`GA4_SERVICE_ACCOUNT_FILE` (path) — Echo mints and refreshes the read-only token
+itself (`echo/integrations/ga4_auth.py`), no external refresher needed.
+Alternatively, supply a pre-minted token via `GA4_ACCESS_TOKEN`. Until a property
+id + a token source are set, GA4 reports `ga4_configured: false` and the Weekly
+Report falls back to DB inventory.
 
 ### Instagram image hosting
 

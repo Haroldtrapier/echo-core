@@ -30,6 +30,7 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `LINKEDIN_ACCESS_TOKEN` | LinkedIn publishing |
 | `LINKEDIN_AUTHOR_URN` | LinkedIn author URN (`urn:li:person:...`) |
 | `SLACK_WEBHOOK_URL` | Slack notifications |
+| `RESEND_API_KEY` + `EMAIL_FROM` | Send approved `email` drafts via Resend (`POST /approvals/{id}/send`) |
 | `GA4_PROPERTY_ID` | GA4 property id for campaign click/conversion attribution |
 | `GA4_ACCESS_TOKEN` | OAuth2 bearer token for the GA4 Data API (read-only) |
 | `IMAGE_API_KEY` | OpenAI-compatible images API key (auto Instagram image) |
@@ -37,6 +38,9 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` + `MEDIA_BUCKET` | Host generated images at a public URL (for base64 image responses) |
 | `ECHO_ALLOW_LIVE_PUBLISH` | Set to `true` to enable live publishing (default: dry-run only) |
 | `ECHO_ENABLED` | Set to `false` to disable workflow scheduling (default: `true`) |
+| `ECHO_SCHEDULE_<SLUG>` | Override a scheduled workflow's cadence in seconds (`0` disables) |
+| `ECHO_RLS_ENABLED` | Scope DB sessions to their tenant for opt-in RLS (default: `false`; pair with `SELECT echo_enable_rls();`) |
+| `NRS_API_URL` / `SEMA_API_URL` | Extra disaster feeds folded into FEMA (safe no-op when unset) |
 | `WORKER_TICK_INTERVAL` | Worker scheduler interval in seconds (default: `60`) |
 | `CORS_ORIGINS` | Comma-separated allowed origins (default: `*`) |
 
@@ -58,6 +62,7 @@ GET  /api/v1/runs                            # List workflow runs
 GET  /api/v1/runs/{run_id}                   # Get a workflow run
 GET  /api/v1/approvals                       # List pending approvals
 POST /api/v1/approvals/{approval_id}/decide  # Approve or reject
+POST /api/v1/govcon/approvals/{id}/send      # Send an approved draft (LinkedIn/email; dry-run unless gate on)
 GET  /api/v1/content                         # Content cockpit
 GET  /api/v1/publishing-jobs                 # Publishing job cockpit
 GET  /api/v1/logs                            # Automation logs
@@ -127,8 +132,12 @@ pytest -q
 Run in Supabase SQL Editor (or via `supabase db push`):
 1. `supabase/migrations/0001_echo_core_schema.sql` — workflow_runs, approvals
 2. `supabase/migrations/0002_cockpit_read_models.sql` — content_items, publishing_jobs, automation_logs, integration_health
+3. `supabase/migrations/0003_echo_jobs.sql` — echo_jobs, echo_job_schedules, echo_execution_audits
+4. `supabase/migrations/0004_echo_govcon.sql` — echo_workflows, echo_analytics_events, echo_sturgeon_handoffs, compatibility views
+5. `supabase/migrations/0005_id_type_reconciliation.sql` — align id columns (UUID→TEXT) with the ORM
+6. `supabase/migrations/0006_multitenant_rls.sql` — opt-in multi-tenant RLS (`SELECT echo_enable_rls();`)
 
-Both migrations are idempotent and safe to re-run.
+All migrations are idempotent and safe to re-run.
 
 ## Security
 

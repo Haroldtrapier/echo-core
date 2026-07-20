@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from echo.core.logger import get_logger
 from echo.core.registry import get_workflow
 from echo.core.workflow import WorkflowResult
-from echo.db import WorkflowRun
+from echo.db import WorkflowRun, apply_session_tenant
 from echo.modules import events
 
 log = get_logger("echo.core.runner")
@@ -64,6 +64,10 @@ def run_workflow(
     # Clamp: a negative max_retries (e.g. supplied via payload) means "no retries",
     # never a skipped run loop.
     max_retries = max(0, max_retries)
+
+    # Scope the session to this run's tenant so RLS (when enabled) isolates the
+    # run and everything it writes. No-op unless ECHO_RLS_ENABLED on Postgres.
+    apply_session_tenant(db, tenant_id)
 
     run = WorkflowRun(
         workflow_slug=slug,

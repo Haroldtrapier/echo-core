@@ -32,6 +32,7 @@ from echo.config import DEFAULT_TENANT_ID
 from echo.core.registry import all_metadata
 from echo.db import Approval, EchoSturgeonHandoff, get_db
 from echo.modules import approval as approval_mod
+from echo.modules import dispatch as dispatch_mod
 from echo.modules import events as events_mod
 from echo.modules import sturgeon as sturgeon_mod
 
@@ -140,6 +141,38 @@ def mark_ready(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     return approval_mod.approval_dict(a)
+
+
+class SendDraftRequest(BaseModel):
+    sent_by: str
+    #: Required for `email` drafts; ignored for `linkedin_post`.
+    recipient: str | None = None
+    subject: str | None = None
+    tenant_id: str | None = None
+    #: Default True — a live send also requires ECHO_ALLOW_LIVE_PUBLISH=true.
+    dry_run: bool = True
+
+
+@router.post("/approvals/{approval_id}/send", dependencies=[Depends(require_api_key)])
+def send_draft(
+    approval_id: str, body: SendDraftRequest, db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    """Send an approved/ready draft through its connector (LinkedIn / email).
+
+    Dry-run by default and always dry-run unless `ECHO_ALLOW_LIVE_PUBLISH=true`.
+    """
+    try:
+        return dispatch_mod.send_ready_draft(
+            db,
+            approval_id,
+            sent_by=body.sent_by,
+            recipient=body.recipient,
+            subject=body.subject,
+            tenant_id=body.tenant_id,
+            dry_run=body.dry_run,
+        )
+    except dispatch_mod.DispatchError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
 # ─── Sturgeon handoff ─────────────────────────────────────────────────────────

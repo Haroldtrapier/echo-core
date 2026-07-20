@@ -33,11 +33,12 @@ def tick_once() -> None:
     from echo.core.scheduler import tick
     with db_session() as db:
         report = tick(db)
-    if report.processed > 0 or report.failed > 0:
+    if report.processed or report.scheduled or report.failed:
         log.info(
-            "Tick complete: processed=%d failed=%d",
+            "Tick complete: processed=%d scheduled=%d failed=%d",
             report.processed,
-            report.failed,
+            len(report.scheduled),
+            report.failed_count,
         )
 
 

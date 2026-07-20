@@ -39,9 +39,31 @@ LINKEDIN_ACCESS_TOKEN: str = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
 LINKEDIN_AUTHOR_URN: str = os.getenv("LINKEDIN_AUTHOR_URN", "")
 # Slack incoming-webhook URL for notifications (optional — alerts are skipped if unset).
 SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
+# Email (Resend) — sends approved `email` drafts (lead nurture, certification).
+# Both required to send; absent → email dispatch stays dry-run.
+RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+EMAIL_FROM: str = os.getenv("EMAIL_FROM", "")
 # GA4 (Google Analytics 4) — read-only campaign attribution for the Weekly Report.
 GA4_PROPERTY_ID: str = os.getenv("GA4_PROPERTY_ID", "")
+# A pre-minted OAuth2 bearer token (legacy / external provider). Optional if a
+# service account is configured below — Echo then mints + refreshes its own token.
 GA4_ACCESS_TOKEN: str = os.getenv("GA4_ACCESS_TOKEN", "")
+# Service-account credentials for self-minting GA4 tokens (no external refresher
+# needed). Provide the JSON key inline via GA4_SERVICE_ACCOUNT_JSON *or* a path
+# via GA4_SERVICE_ACCOUNT_FILE. Grant the service account "Viewer" on the GA4
+# property. Requires the `cryptography` package (in requirements.txt).
+GA4_SERVICE_ACCOUNT_JSON: str = os.getenv("GA4_SERVICE_ACCOUNT_JSON", "")
+GA4_SERVICE_ACCOUNT_FILE: str = os.getenv("GA4_SERVICE_ACCOUNT_FILE", "")
+
+# Disaster feeds beyond FEMA (provisioned adapters — safe no-op when unset).
+# NRS: National Response System feed. SEMA: State Emergency Management Agency
+# feed; SEMA_API_URL may contain a "{state}" placeholder (e.g.
+# https://alerts.example.gov/{state}/declarations.json). Both normalize to the
+# FEMA declaration shape and fold into pack.safe_disaster_declarations().
+NRS_API_URL: str = os.getenv("NRS_API_URL", "")
+NRS_API_KEY: str = os.getenv("NRS_API_KEY", "")
+SEMA_API_URL: str = os.getenv("SEMA_API_URL", "")
+SEMA_API_KEY: str = os.getenv("SEMA_API_KEY", "")
 
 # Image generation (Instagram creative). OpenAI-compatible images API.
 IMAGE_API_KEY: str = os.getenv("IMAGE_API_KEY", "")
@@ -65,6 +87,13 @@ MEDIA_BUCKET: str = os.getenv("MEDIA_BUCKET", "echo-media")
 # Default workspace/tenant used when a caller does not supply one. Echo is
 # single-tenant-by-default; multi-tenant callers pass tenant_id explicitly.
 DEFAULT_TENANT_ID: str = os.getenv("DEFAULT_TENANT_ID", "imani-internal")
+# When true, each DB session sets the `app.current_tenant` GUC so the opt-in
+# Row-Level Security policies (migration 0006 → SELECT echo_enable_rls()) scope
+# reads/writes to the caller's tenant. Off by default: the standard deployment
+# connects as the table owner and bypasses RLS, so single-tenant setups are
+# unaffected. Turn this on together with echo_enable_rls() for tenant isolation
+# on non-owner/least-privilege DB roles. No-op on SQLite (dev/test).
+ECHO_RLS_ENABLED: bool = os.getenv("ECHO_RLS_ENABLED", "false").lower() == "true"
 
 # ── Sturgeon handoff ──────────────────────────────────────────────────────────
 # When STURGEON_API_URL is set, Echo GovCon forwards handoffs to Sturgeon's
@@ -75,9 +104,13 @@ STURGEON_API_KEY: str = os.getenv("STURGEON_API_KEY", "")
 # Public URL a human clicks to open the opportunity in Sturgeon (used in CTAs).
 STURGEON_APP_URL: str = os.getenv("STURGEON_APP_URL", "https://sturgeon.ai")
 
-# ── Worker ────────────────────────────────────────────────────────────────────
+# ── Worker / scheduling ───────────────────────────────────────────────────────
 # How often (seconds) the background worker ticks the scheduler
 WORKER_TICK_INTERVAL: int = int(os.getenv("WORKER_TICK_INTERVAL", "60"))
+# Per-workflow cadence override: set ECHO_SCHEDULE_<SLUG> (uppercased slug) to a
+# number of seconds to change how often a scheduled workflow auto-runs, or to 0
+# to disable it. Defaults come from each workflow's schedule_interval_seconds.
+# Read dynamically in echo.core.scheduler.resolve_schedule_seconds.
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 _raw_cors = os.getenv("CORS_ORIGINS", "*")
