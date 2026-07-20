@@ -39,6 +39,10 @@ LINKEDIN_ACCESS_TOKEN: str = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
 LINKEDIN_AUTHOR_URN: str = os.getenv("LINKEDIN_AUTHOR_URN", "")
 # Slack incoming-webhook URL for notifications (optional — alerts are skipped if unset).
 SLACK_WEBHOOK_URL: str = os.getenv("SLACK_WEBHOOK_URL", "")
+# Email (Resend) — sends approved `email` drafts (lead nurture, certification).
+# Both required to send; absent → email dispatch stays dry-run.
+RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+EMAIL_FROM: str = os.getenv("EMAIL_FROM", "")
 # GA4 (Google Analytics 4) — read-only campaign attribution for the Weekly Report.
 GA4_PROPERTY_ID: str = os.getenv("GA4_PROPERTY_ID", "")
 GA4_ACCESS_TOKEN: str = os.getenv("GA4_ACCESS_TOKEN", "")

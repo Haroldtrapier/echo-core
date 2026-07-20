@@ -54,10 +54,15 @@ Status of the Echo Core + Echo GovCon production MVP.
 
 ## Remaining gaps (to reach truly 100%)
 
-- [ ] **Live connector send** on `mark-ready` (LinkedIn/email) — currently
-      publishing still runs through `approved_publisher` in dry-run until
-      `ECHO_ALLOW_LIVE_PUBLISH=true` and real connector creds exist. (Config +
-      credentials, not missing code.)
+- [x] **Live connector send for approved drafts** — `echo/modules/dispatch.py`
+      + `POST /api/v1/govcon/approvals/{id}/send` route approved GovCon drafts to
+      their connector by `draft_type` (`linkedin_post` → LinkedIn,
+      `email` → Resend via the new `echo/integrations/email_resend.py`), record a
+      publishing job + `draft_published_or_marked_ready` event, and advance the
+      draft to `sent`. Stays behind `ECHO_ALLOW_LIVE_PUBLISH` (dry-run by
+      default). Code-complete; live send now needs only real connector creds
+      (`LINKEDIN_*`, `RESEND_API_KEY` + `EMAIL_FROM`) and the gate flip.
+      Covered by `tests/test_dispatch.py`.
 - [ ] **CTA click attribution** — depends on GA4 being configured
       (`GA4_PROPERTY_ID` / `GA4_ACCESS_TOKEN`); the weekly tracker notes this.
 - [x] **Multi-tenant RLS** — migration `0006_multitenant_rls.sql` installs

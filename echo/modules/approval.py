@@ -195,8 +195,12 @@ def mark_ready(
     """Mark an approved draft as ready to publish/send.
 
     Records a ``draft_published_or_marked_ready`` analytics event. This does not
-    itself publish — publishing stays gated behind ``approved_publisher`` /
-    connector execution — it signals the draft has cleared review and is queued.
+    itself publish — it signals the draft has cleared review and is queued. To
+    actually send an approved/ready draft through its connector (LinkedIn /
+    email), call ``echo.modules.dispatch.send_ready_draft`` (``POST
+    /approvals/{id}/send``), which stays behind the ``ECHO_ALLOW_LIVE_PUBLISH``
+    gate. Social ContentItems can also ship via the ``approved_publisher``
+    workflow.
     """
     approval = db.query(Approval).filter(Approval.id == approval_id).first()
     if approval is None:

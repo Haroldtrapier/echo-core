@@ -30,6 +30,7 @@ Both services share the same codebase and the same Railway Postgres database. De
 | `LINKEDIN_ACCESS_TOKEN` | LinkedIn publishing |
 | `LINKEDIN_AUTHOR_URN` | LinkedIn author URN (`urn:li:person:...`) |
 | `SLACK_WEBHOOK_URL` | Slack notifications |
+| `RESEND_API_KEY` + `EMAIL_FROM` | Send approved `email` drafts via Resend (`POST /approvals/{id}/send`) |
 | `GA4_PROPERTY_ID` | GA4 property id for campaign click/conversion attribution |
 | `GA4_ACCESS_TOKEN` | OAuth2 bearer token for the GA4 Data API (read-only) |
 | `IMAGE_API_KEY` | OpenAI-compatible images API key (auto Instagram image) |
@@ -61,6 +62,7 @@ GET  /api/v1/runs                            # List workflow runs
 GET  /api/v1/runs/{run_id}                   # Get a workflow run
 GET  /api/v1/approvals                       # List pending approvals
 POST /api/v1/approvals/{approval_id}/decide  # Approve or reject
+POST /api/v1/govcon/approvals/{id}/send      # Send an approved draft (LinkedIn/email; dry-run unless gate on)
 GET  /api/v1/content                         # Content cockpit
 GET  /api/v1/publishing-jobs                 # Publishing job cockpit
 GET  /api/v1/logs                            # Automation logs
