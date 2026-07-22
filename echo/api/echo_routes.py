@@ -290,14 +290,65 @@ def execute_job(job_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
             detail="Execution blocked: live publishing is disabled (ECHO_ALLOW_LIVE_PUBLISH=false).",
         )
 
-    # Both gates passed — update status
-    job.status = "approved"
-    _record_audit(
-        db, job=job, action="execute",
-        result="allowed_unimplemented",
-        reason="Execution allowed. Live publishing not yet wired — marking approved.",
-        approval_status=approval_status,
-    )
+    # Both gates passed — perform the live publish.
+    from echo.modules.publisher import publish
+
+    content: dict[str, Any] = {"body": job.body, "title": job.subject or job.title}
+    if isinstance(job.job_metadata, dict):
+        extra = job.job_metadata.get("content")
+        if isinstance(extra, dict):
+            content.update(extra)
+
+    result = publish(job.channel, content, dry_run=False)
+
+    if result.dry_run:
+        # Publisher re-forced dry-run (config drift between route and module).
+        _record_audit(
+            db, job=job, action="execute",
+            result="blocked_live_disabled",
+            reason="Publisher forced dry-run despite route gate; check "
+                   "ECHO_ALLOW_LIVE_PUBLISH consistency.",
+            approval_status=approval_status,
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Publisher refused live mode; ECHO_ALLOW_LIVE_PUBLISH mismatch.",
+        )
+
+    if result.success:
+        job.status = "published"
+        job.job_metadata = {
+            **(job.job_metadata if isinstance(job.job_metadata, dict) else {}),
+            "live_publish": {
+                "platform": result.platform,
+                "live_url": result.live_url,
+                "published_at": _utcnow().isoformat(),
+            },
+        }
+        _record_audit(
+            db, job=job, action="execute",
+            result="published_live",
+            reason=f"Live publish succeeded: {result.live_url or 'no URL returned'}",
+            approval_status=approval_status,
+        )
+    else:
+        job.status = "failed"
+        job.job_metadata = {
+            **(job.job_metadata if isinstance(job.job_metadata, dict) else {}),
+            "live_publish": {
+                "platform": result.platform,
+                "error": result.error,
+                "failed_at": _utcnow().isoformat(),
+            },
+        }
+        _record_audit(
+            db, job=job, action="execute",
+            result="publish_failed",
+            reason=f"Live publish failed: {result.error}",
+            approval_status=approval_status,
+        )
+
     db.commit()
     db.refresh(job)
     return _job_dict(job)
